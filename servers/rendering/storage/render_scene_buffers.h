@@ -115,6 +115,10 @@ public:
 	virtual void set_texture_mipmap_bias(float p_texture_mipmap_bias) = 0;
 	virtual void set_anisotropic_filtering_level(RS::ViewportAnisotropicFiltering p_anisotropic_filtering_level) = 0;
 	virtual void set_use_debanding(bool p_use_debanding) = 0;
+
+	// Access to viewport pass textures (when 3D is rendered). Return RID() when not available.
+	virtual RID get_depth_texture() const { return RID(); }
+	virtual RID get_normal_texture() const { return RID(); }
 };
 
 class RenderSceneBuffersExtension : public RenderSceneBuffers {

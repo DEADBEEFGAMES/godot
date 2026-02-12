@@ -702,6 +702,8 @@ public:
 
 	FUNC1RC(RID, viewport_get_render_target, RID)
 	FUNC1RC(RID, viewport_get_texture, RID)
+	FUNC1RC(RID, viewport_get_depth_texture, RID)
+	FUNC1RC(RID, viewport_get_normal_texture, RID)
 
 	FUNC2(viewport_set_disable_2d, RID, bool)
 	FUNC2(viewport_set_environment_mode, RID, ViewportEnvironmentMode)

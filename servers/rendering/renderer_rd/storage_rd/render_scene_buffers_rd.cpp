@@ -608,7 +608,7 @@ bool RenderSceneBuffersRD::has_depth_texture() {
 	}
 }
 
-RID RenderSceneBuffersRD::get_depth_texture() {
+RID RenderSceneBuffersRD::get_depth_texture() const {
 	if (render_target.is_null()) {
 		// not applicable when there is no render target (likely this is for a reflection probe)
 		return RID();
@@ -621,6 +621,14 @@ RID RenderSceneBuffersRD::get_depth_texture() {
 	} else {
 		return get_texture(RB_SCOPE_BUFFERS, RB_TEX_DEPTH);
 	}
+}
+
+RID RenderSceneBuffersRD::get_normal_texture() const {
+	// Normal buffer is only available in the forward clustered renderer (normal_roughness buffer).
+	if (has_texture(SNAME("forward_clustered"), SNAME("normal_roughness"))) {
+		return get_texture(SNAME("forward_clustered"), SNAME("normal_roughness"));
+	}
+	return RID();
 }
 
 RID RenderSceneBuffersRD::get_depth_texture(const uint32_t p_layer) {

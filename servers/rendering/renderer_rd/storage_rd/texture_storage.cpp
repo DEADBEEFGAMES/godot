@@ -1765,11 +1765,16 @@ RID TextureStorage::texture_get_rd_texture(RID p_texture, bool p_srgb) const {
 	}
 
 	Texture *tex = texture_owner.get_or_null(p_texture);
-	if (!tex) {
-		return RID();
+	if (tex) {
+		return (p_srgb && tex->rd_texture_srgb.is_valid()) ? tex->rd_texture_srgb : tex->rd_texture;
 	}
 
-	return (p_srgb && tex->rd_texture_srgb.is_valid()) ? tex->rd_texture_srgb : tex->rd_texture;
+	// RID may be a raw RD texture (e.g. from viewport_get_depth_texture/viewport_get_normal_texture).
+	// Pass it through so callers can use it with RenderingDevice directly.
+	if (!p_srgb && RD::get_singleton()->texture_is_valid(p_texture)) {
+		return p_texture;
+	}
+	return RID();
 }
 
 uint64_t TextureStorage::texture_get_native_handle(RID p_texture, bool p_srgb) const {

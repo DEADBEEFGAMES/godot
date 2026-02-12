@@ -155,6 +155,10 @@ void RenderForwardClustered::RenderBufferDataForwardClustered::configure(RenderS
 
 	RID sampler = RendererRD::MaterialStorage::get_singleton()->sampler_rd_get_default(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST, RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED);
 	cluster_builder->setup(p_render_buffers->get_internal_size(), p_render_buffers->get_max_cluster_elements(), p_render_buffers->get_depth_texture(), sampler, p_render_buffers->get_internal_texture());
+
+	// For this build: allocate normal_roughness immediately so every viewport (including subviewports)
+	// has forward_clustered/normal_roughness available for viewport_get_normal_texture().
+	ensure_normal_roughness_texture();
 }
 
 RID RenderForwardClustered::RenderBufferDataForwardClustered::get_color_only_fb() {
@@ -1673,6 +1677,13 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		// Our forward clustered custom data buffer will only be available when we're rendering our normal view.
 		// This will not be available when rendering reflection probes.
 		rb_data = rb->get_custom_data(RB_SCOPE_FORWARD_CLUSTERED);
+	} else if (!p_render_data->reflection_probe.is_valid()) {
+		// Ensure every viewport (including subviewports) has forward clustered data so normal_roughness is available.
+		setup_render_buffer_data(rb);
+		rb_data = rb->get_custom_data(RB_SCOPE_FORWARD_CLUSTERED);
+		if (rb_data.is_valid()) {
+			rb_data->configure(rb.ptr());
+		}
 	}
 	bool is_reflection_probe = p_render_data->reflection_probe.is_valid();
 
@@ -1892,6 +1903,12 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 				depth_pass_mode = PASS_MODE_DEPTH_NORMAL_ROUGHNESS;
 			}
 		} else if (get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_NORMAL_BUFFER || scene_state.used_normal_texture) {
+			depth_pass_mode = PASS_MODE_DEPTH_NORMAL_ROUGHNESS;
+		}
+
+		// Custom: for this build, always allocate and write the normal/roughness buffer
+		// for any 3D viewport using the Forward+ renderer.
+		if (depth_pass_mode == PASS_MODE_DEPTH) {
 			depth_pass_mode = PASS_MODE_DEPTH_NORMAL_ROUGHNESS;
 		}
 

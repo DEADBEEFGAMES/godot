@@ -1160,6 +1160,26 @@ RID RendererViewport::viewport_get_texture(RID p_viewport) const {
 	return RSG::texture_storage->render_target_get_texture(viewport->render_target);
 }
 
+RID RendererViewport::viewport_get_depth_texture(RID p_viewport) const {
+	const Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	ERR_FAIL_NULL_V(viewport, RID());
+
+	if (viewport->render_buffers.is_valid()) {
+		return viewport->render_buffers->get_depth_texture();
+	}
+	return RID();
+}
+
+RID RendererViewport::viewport_get_normal_texture(RID p_viewport) const {
+	const Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	ERR_FAIL_NULL_V(viewport, RID());
+
+	if (viewport->render_buffers.is_valid()) {
+		return viewport->render_buffers->get_normal_texture();
+	}
+	return RID();
+}
+
 RID RendererViewport::viewport_get_occluder_debug_texture(RID p_viewport) const {
 	const Viewport *viewport = viewport_owner.get_or_null(p_viewport);
 	ERR_FAIL_NULL_V(viewport, RID());

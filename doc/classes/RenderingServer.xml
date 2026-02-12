@@ -3906,6 +3906,20 @@
 				Returns the viewport's last rendered frame.
 			</description>
 		</method>
+		<method name="viewport_get_depth_texture" qualifiers="const">
+			<return type="RID" />
+			<param index="0" name="viewport" type="RID" />
+			<description>
+				Returns the depth buffer texture from the viewport's 3D rendering pass. Returns an invalid RID if the viewport has no 3D rendering (e.g. 3D disabled) or the renderer does not expose depth. Use this in shaders or compositor effects to read scene depth.
+			</description>
+		</method>
+		<method name="viewport_get_normal_texture" qualifiers="const">
+			<return type="RID" />
+			<param index="0" name="viewport" type="RID" />
+			<description>
+				Returns the normal buffer texture from the viewport's 3D rendering pass (normal/roughness buffer when available). Returns an invalid RID if the viewport has no 3D rendering or the renderer does not expose normals (e.g. forward mobile). Use this in shaders or compositor effects to read scene normals.
+			</description>
+		</method>
 		<method name="viewport_get_update_mode" qualifiers="const">
 			<return type="int" enum="RenderingServer.ViewportUpdateMode" />
 			<param index="0" name="viewport" type="RID" />
