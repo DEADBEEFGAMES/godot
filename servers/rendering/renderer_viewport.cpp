@@ -203,12 +203,17 @@ void RendererViewport::_configure_3d_render_buffers(Viewport *p_viewport) {
 			int render_width;
 			int render_height;
 
+			// When 3D scaling is used, output resolution defaults to viewport size; scaling_3d_output_size is an optional override.
+			const bool use_output_size_override = (scaling_3d_mode != RS::VIEWPORT_SCALING_3D_MODE_OFF) && p_viewport->scaling_3d_output_size.x > 0 && p_viewport->scaling_3d_output_size.y > 0;
+			const int base_width = use_output_size_override ? p_viewport->scaling_3d_output_size.x : p_viewport->size.width;
+			const int base_height = use_output_size_override ? p_viewport->scaling_3d_output_size.y : p_viewport->size.height;
+
 			switch (scaling_3d_mode) {
 				case RS::VIEWPORT_SCALING_3D_MODE_BILINEAR:
 					// Clamp 3D rendering resolution to reasonable values supported on most hardware.
 					// This prevents freezing the engine or outright crashing on lower-end GPUs.
-					target_width = p_viewport->size.width;
-					target_height = p_viewport->size.height;
+					target_width = base_width;
+					target_height = base_height;
 					render_width = CLAMP(target_width * scaling_3d_scale, 1, 16384);
 					render_height = CLAMP(target_height * scaling_3d_scale, 1, 16384);
 					break;
@@ -216,14 +221,14 @@ void RendererViewport::_configure_3d_render_buffers(Viewport *p_viewport) {
 				case RS::VIEWPORT_SCALING_3D_MODE_METALFX_TEMPORAL:
 				case RS::VIEWPORT_SCALING_3D_MODE_FSR:
 				case RS::VIEWPORT_SCALING_3D_MODE_FSR2:
-					target_width = p_viewport->size.width;
-					target_height = p_viewport->size.height;
+					target_width = base_width;
+					target_height = base_height;
 					render_width = MAX(target_width * scaling_3d_scale, 1.0); // target_width / (target_width * scaling)
 					render_height = MAX(target_height * scaling_3d_scale, 1.0);
 					break;
 				case RS::VIEWPORT_SCALING_3D_MODE_OFF:
-					target_width = p_viewport->size.width;
-					target_height = p_viewport->size.height;
+					target_width = base_width;
+					target_height = base_height;
 					render_width = target_width;
 					render_height = target_height;
 					break;
@@ -232,8 +237,8 @@ void RendererViewport::_configure_3d_render_buffers(Viewport *p_viewport) {
 					WARN_PRINT_ONCE(vformat("Unknown scaling mode: %d. Disabling 3D resolution scaling.", scaling_3d_mode));
 					scaling_3d_mode = RS::VIEWPORT_SCALING_3D_MODE_OFF;
 					scaling_3d_scale = 1.0;
-					target_width = p_viewport->size.width;
-					target_height = p_viewport->size.height;
+					target_width = base_width;
+					target_height = base_height;
 					render_width = target_width;
 					render_height = target_height;
 					break;
@@ -271,7 +276,15 @@ void RendererViewport::_configure_3d_render_buffers(Viewport *p_viewport) {
 			rb_config.set_use_debanding(p_viewport->use_debanding);
 
 			p_viewport->render_buffers->configure(&rb_config);
+
+			// Keep final render target at target (native) resolution so custom pipelines and output aren't scaled down.
+			RSG::texture_storage->render_target_set_size(p_viewport->render_target, target_width, target_height, p_viewport->view_count);
 		}
+	} else if (p_viewport->scaling_3d_mode != RS::VIEWPORT_SCALING_3D_MODE_OFF) {
+		// When scaling is on, keep render target at output res (viewport size or scaling_3d_output_size if set) even when render_buffers aren't ready.
+		const int rt_w = (p_viewport->scaling_3d_output_size.x > 0 && p_viewport->scaling_3d_output_size.y > 0) ? p_viewport->scaling_3d_output_size.x : p_viewport->size.width;
+		const int rt_h = (p_viewport->scaling_3d_output_size.x > 0 && p_viewport->scaling_3d_output_size.y > 0) ? p_viewport->scaling_3d_output_size.y : p_viewport->size.height;
+		RSG::texture_storage->render_target_set_size(p_viewport->render_target, rt_w, rt_h, p_viewport->view_count);
 	}
 }
 
@@ -1024,6 +1037,23 @@ void RendererViewport::viewport_set_scaling_3d_scale(RID p_viewport, float p_sca
 	_configure_3d_render_buffers(viewport);
 }
 
+void RendererViewport::viewport_set_scaling_3d_output_size(RID p_viewport, int p_width, int p_height) {
+	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	ERR_FAIL_NULL(viewport);
+
+	Size2i new_size(p_width, p_height);
+	if (viewport->scaling_3d_output_size == new_size) {
+		return;
+	}
+
+	viewport->scaling_3d_output_size = new_size;
+	_configure_3d_render_buffers(viewport);
+	// Apply render target size when output size is set and 3D scaling is on (in case render_buffers weren't ready in configure).
+	if (viewport->scaling_3d_mode != RS::VIEWPORT_SCALING_3D_MODE_OFF && p_width > 0 && p_height > 0) {
+		RSG::texture_storage->render_target_set_size(viewport->render_target, p_width, p_height, viewport->view_count);
+	}
+}
+
 void RendererViewport::viewport_set_size(RID p_viewport, int p_width, int p_height) {
 	ERR_FAIL_COND(p_width < 0 || p_height < 0);
 
@@ -1040,7 +1070,14 @@ void RendererViewport::_viewport_set_size(Viewport *p_viewport, int p_width, int
 		p_viewport->size = new_size;
 		p_viewport->view_count = p_view_count;
 
-		RSG::texture_storage->render_target_set_size(p_viewport->render_target, p_width, p_height, p_view_count);
+		// When 3D scaling is on, output res = viewport size by default; optional scaling_3d_output_size overrides.
+		int rt_w = p_width;
+		int rt_h = p_height;
+		if (p_viewport->scaling_3d_mode != RS::VIEWPORT_SCALING_3D_MODE_OFF && p_viewport->scaling_3d_output_size.x > 0 && p_viewport->scaling_3d_output_size.y > 0) {
+			rt_w = p_viewport->scaling_3d_output_size.x;
+			rt_h = p_viewport->scaling_3d_output_size.y;
+		}
+		RSG::texture_storage->render_target_set_size(p_viewport->render_target, rt_w, rt_h, p_view_count);
 		_configure_3d_render_buffers(p_viewport);
 
 		p_viewport->occlusion_buffer_dirty = true;
@@ -1090,7 +1127,13 @@ void RendererViewport::viewport_attach_to_screen(RID p_viewport, const Rect2 &p_
 		// If using OpenGL we can optimize this operation by rendering directly to system_fbo
 		// instead of rendering to fbo and copying to system_fbo after
 		if (RSG::rasterizer->is_low_end() && viewport->viewport_render_direct_to_screen) {
-			RSG::texture_storage->render_target_set_size(viewport->render_target, p_rect.size.x, p_rect.size.y, viewport->view_count);
+			int rt_w = p_rect.size.x;
+			int rt_h = p_rect.size.y;
+			if (viewport->scaling_3d_mode != RS::VIEWPORT_SCALING_3D_MODE_OFF && viewport->scaling_3d_output_size.x > 0 && viewport->scaling_3d_output_size.y > 0) {
+				rt_w = viewport->scaling_3d_output_size.x;
+				rt_h = viewport->scaling_3d_output_size.y;
+			}
+			RSG::texture_storage->render_target_set_size(viewport->render_target, rt_w, rt_h, viewport->view_count);
 			RSG::texture_storage->render_target_set_position(viewport->render_target, p_rect.position.x, p_rect.position.y);
 		}
 
@@ -1100,12 +1143,21 @@ void RendererViewport::viewport_attach_to_screen(RID p_viewport, const Rect2 &p_
 		// if render_direct_to_screen was used, reset size and position
 		if (RSG::rasterizer->is_low_end() && viewport->viewport_render_direct_to_screen) {
 			RSG::texture_storage->render_target_set_position(viewport->render_target, 0, 0);
-			RSG::texture_storage->render_target_set_size(viewport->render_target, viewport->size.x, viewport->size.y, viewport->view_count);
+			int rt_w = viewport->size.x;
+			int rt_h = viewport->size.y;
+			if (viewport->scaling_3d_mode != RS::VIEWPORT_SCALING_3D_MODE_OFF && viewport->scaling_3d_output_size.x > 0 && viewport->scaling_3d_output_size.y > 0) {
+				rt_w = viewport->scaling_3d_output_size.x;
+				rt_h = viewport->scaling_3d_output_size.y;
+			}
+			RSG::texture_storage->render_target_set_size(viewport->render_target, rt_w, rt_h, viewport->view_count);
 		}
 
 		viewport->viewport_to_screen_rect = Rect2();
 		viewport->viewport_to_screen = DisplayServer::INVALID_WINDOW_ID;
 	}
+
+	// Re-apply scaling_3d_output_size so render target stays at requested size after attach (e.g. when called after _ready()).
+	_configure_3d_render_buffers(viewport);
 }
 
 void RendererViewport::viewport_set_render_direct_to_screen(RID p_viewport, bool p_enable) {
@@ -1119,11 +1171,20 @@ void RendererViewport::viewport_set_render_direct_to_screen(RID p_viewport, bool
 	// if disabled, reset render_target size and position
 	if (!p_enable) {
 		RSG::texture_storage->render_target_set_position(viewport->render_target, 0, 0);
-		RSG::texture_storage->render_target_set_size(viewport->render_target, viewport->size.x, viewport->size.y, viewport->view_count);
+		int rt_w = viewport->size.x;
+		int rt_h = viewport->size.y;
+		if (viewport->scaling_3d_mode != RS::VIEWPORT_SCALING_3D_MODE_OFF && viewport->scaling_3d_output_size.x > 0 && viewport->scaling_3d_output_size.y > 0) {
+			rt_w = viewport->scaling_3d_output_size.x;
+			rt_h = viewport->scaling_3d_output_size.y;
+		}
+		RSG::texture_storage->render_target_set_size(viewport->render_target, rt_w, rt_h, viewport->view_count);
 	}
 
 	RSG::texture_storage->render_target_set_direct_to_screen(viewport->render_target, p_enable);
 	viewport->viewport_render_direct_to_screen = p_enable;
+
+	// Re-apply scaling_3d_output_size so render target stays correct.
+	_configure_3d_render_buffers(viewport);
 
 	// if attached to screen already, setup screen size and position, this needs to happen after setting flag to avoid an unnecessary buffer allocation
 	if (RSG::rasterizer->is_low_end() && viewport->viewport_to_screen_rect != Rect2() && p_enable) {

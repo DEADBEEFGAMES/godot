@@ -357,13 +357,32 @@ public:
 	}
 
 	Ref<RDShaderSPIRV> get_spirv(const StringName &p_version = StringName()) const {
-		ERR_FAIL_COND_V(!versions.has(p_version), Ref<RDShaderSPIRV>());
-		return versions[p_version];
+		if (versions.has(p_version)) {
+			return versions[p_version];
+		}
+		// Default version: try "default" when "" not found (empty key can be lost when .res is saved/loaded on export).
+		if (p_version == StringName()) {
+			if (versions.has("default")) {
+				return versions["default"];
+			}
+			if (versions.has("")) {
+				return versions[""];
+			}
+		}
+		// Single-version shader: return the only version regardless of key.
+		if (versions.size() == 1) {
+			return versions.begin()->value;
+		}
+		ERR_PRINT("Shader version '" + String(p_version) + "' not found. Use get_version_list() to get valid version names.");
+		return Ref<RDShaderSPIRV>();
 	}
 
 	Vector<RD::ShaderStageSPIRVData> get_spirv_stages(const StringName &p_version = StringName()) const {
-		ERR_FAIL_COND_V(!versions.has(p_version), Vector<RD::ShaderStageSPIRVData>());
-		return versions[p_version]->get_stages();
+		Ref<RDShaderSPIRV> bc = get_spirv(p_version);
+		if (bc.is_valid()) {
+			return bc->get_stages();
+		}
+		return Vector<RD::ShaderStageSPIRVData>();
 	}
 
 	TypedArray<StringName> get_version_list() const {

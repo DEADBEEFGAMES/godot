@@ -192,6 +192,11 @@ void RenderSceneBuffersRD::configure(const RenderSceneBuffersConfiguration *p_co
 		create_texture(RB_SCOPE_BUFFERS, RB_TEX_DEPTH_MSAA, get_depth_format(false, true, can_be_storage), get_depth_usage_bits(false, true, can_be_storage), texture_samples, Size2i(), 0, 1, true, true);
 	}
 
+	// When 3D is scaled, create target-size color buffer so get_color_layer(0) returns full-res for compute/custom passes.
+	if (target_size != internal_size) {
+		create_texture(RB_SCOPE_BUFFERS, RB_TEX_COLOR_OUTPUT, base_data_format, get_color_usage_bits(false, false, can_be_storage), RD::TEXTURE_SAMPLES_1, target_size);
+	}
+
 	// VRS (note, our vrs object will only be set if VRS is supported)
 	RID vrs_texture;
 	RS::ViewportVRSMode vrs_mode = texture_storage->render_target_get_vrs_mode(render_target);

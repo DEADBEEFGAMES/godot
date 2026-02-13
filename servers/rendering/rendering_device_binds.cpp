@@ -51,6 +51,7 @@ Error RDShaderFile::parse_versions_from_text(const String &p_text, const String 
 		"compute",
 	};
 	String stage_code[RD::SHADER_STAGE_MAX];
+	String preamble; // #version, #extension, etc. before first stage (so #version can be first line)
 	int stages_found = 0;
 	HashMap<StringName, String> version_texts;
 
@@ -62,11 +63,17 @@ Error RDShaderFile::parse_versions_from_text(const String &p_text, const String 
 
 		{
 			String ls = line.strip_edges();
+			String section;
 			if (ls.begins_with("#[") && ls.ends_with("]")) {
-				String section = ls.substr(2, ls.length() - 3).strip_edges();
+				section = ls.substr(2, ls.length() - 3).strip_edges();
+			} else if (ls.begins_with("#pragma ")) {
+				// Support #pragma compute, #pragma vertex, #pragma fragment, etc.
+				section = ls.substr(7).strip_edges().get_slice(" ", 0).strip_edges();
+			}
+			if (!section.is_empty()) {
 				if (section == "versions") {
 					if (stages_found) {
-						base_error = "Invalid shader file, #[versions] must be the first section found.";
+						base_error = "Invalid shader file, #[versions] or #pragma versions must be the first section found.";
 						break;
 					}
 					reading_versions = true;
@@ -80,6 +87,9 @@ Error RDShaderFile::parse_versions_from_text(const String &p_text, const String 
 
 							stage_found[i] = true;
 							stages_found++;
+							if (stages_found == 1 && !preamble.is_empty()) {
+								stage_code[i] = preamble;
+							}
 
 							stage = RD::ShaderStage(i);
 							reading_versions = false;
@@ -100,6 +110,11 @@ Error RDShaderFile::parse_versions_from_text(const String &p_text, const String 
 			line = line.strip_edges();
 			if (line.begins_with("//") || line.begins_with("/*")) {
 				continue; //assuming comment (single line)
+			}
+			// Allow #version, #extension etc. before first stage so #version can be first line.
+			if (!reading_versions && stages_found == 0 && (line.begins_with("#version ") || line.begins_with("#extension ") || line.begins_with("#pragma "))) {
+				preamble += line + "\n";
+				continue;
 			}
 		}
 
@@ -132,6 +147,7 @@ Error RDShaderFile::parse_versions_from_text(const String &p_text, const String 
 			}
 		} else {
 			if (stage == RD::SHADER_STAGE_MAX && !line.strip_edges().is_empty()) {
+				// Blank lines are already skipped above; remaining content must be a section marker or preamble.
 				base_error = "Text was found that does not belong to a valid section: " + line;
 				break;
 			}
@@ -170,11 +186,12 @@ Error RDShaderFile::parse_versions_from_text(const String &p_text, const String 
 
 	if (base_error.is_empty()) {
 		if (stage_found[RD::SHADER_STAGE_COMPUTE] && stages_found > 1) {
-			ERR_FAIL_V_MSG(ERR_PARSE_ERROR, "When writing compute shaders, [compute] mustbe the only stage present.");
+			ERR_FAIL_V_MSG(ERR_PARSE_ERROR, "When writing compute shaders, the compute stage must be the only stage present.");
 		}
 
 		if (version_texts.is_empty()) {
-			version_texts[""] = ""; //make sure a default version exists
+			// Use "default" so the key round-trips when saving/loading .res (empty string key can be lost on export).
+			version_texts["default"] = "";
 		}
 
 		bool errors_found = false;

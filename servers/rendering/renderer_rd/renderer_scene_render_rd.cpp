@@ -443,8 +443,10 @@ void RendererSceneRenderRD::_render_buffers_post_process_and_tonemap(const Rende
 	}
 
 	RID render_target = rb->get_render_target();
-	RID color_texture = use_upscaled_texture ? rb->get_upscaled_texture() : rb->get_internal_texture();
-	Size2i color_size = use_upscaled_texture ? target_size : rb->get_internal_size();
+	// color_output is filled before POST_TRANSPARENT compositor (in forward_clustered/forward_mobile) so compositor can write to it; do not blit here or we overwrite compositor output.
+	const bool has_color_output = rb->has_texture(RB_SCOPE_BUFFERS, RB_TEX_COLOR_OUTPUT);
+	RID color_texture = use_upscaled_texture ? rb->get_upscaled_texture() : (has_color_output ? rb->get_texture(RB_SCOPE_BUFFERS, RB_TEX_COLOR_OUTPUT) : rb->get_internal_texture());
+	Size2i color_size = use_upscaled_texture ? target_size : (has_color_output ? target_size : rb->get_internal_size());
 
 	bool dest_is_msaa_2d = rb->get_view_count() == 1 && texture_storage->render_target_get_msaa(render_target) != RS::VIEWPORT_MSAA_DISABLED;
 
@@ -464,7 +466,7 @@ void RendererSceneRenderRD::_render_buffers_post_process_and_tonemap(const Rende
 
 		if (can_use_storage) {
 			for (uint32_t i = 0; i < rb->get_view_count(); i++) {
-				buffers.base_texture = use_upscaled_texture ? rb->get_upscaled_texture(i) : rb->get_internal_texture(i);
+				buffers.base_texture = use_upscaled_texture ? rb->get_upscaled_texture(i) : (has_color_output ? rb->get_texture_slice(RB_SCOPE_BUFFERS, RB_TEX_COLOR_OUTPUT, i, 0) : rb->get_internal_texture(i));
 				buffers.depth_texture = rb->get_depth_texture(i);
 
 				// In stereo p_render_data->z_near and p_render_data->z_far can be offset for our combined frustum.
@@ -486,7 +488,7 @@ void RendererSceneRenderRD::_render_buffers_post_process_and_tonemap(const Rende
 			buffers.base_weight_fb = rb->weight_buffers[0].fb;
 
 			for (uint32_t i = 0; i < rb->get_view_count(); i++) {
-				buffers.base_texture = use_upscaled_texture ? rb->get_upscaled_texture(i) : rb->get_internal_texture(i);
+				buffers.base_texture = use_upscaled_texture ? rb->get_upscaled_texture(i) : (has_color_output ? rb->get_texture_slice(RB_SCOPE_BUFFERS, RB_TEX_COLOR_OUTPUT, i, 0) : rb->get_internal_texture(i));
 				buffers.depth_texture = rb->get_depth_texture(i);
 				buffers.base_fb = FramebufferCacheRD::get_singleton()->get_cache(buffers.base_texture); // TODO move this into bokeh_dof_raster, we can do this internally
 
@@ -515,7 +517,7 @@ void RendererSceneRenderRD::_render_buffers_post_process_and_tonemap(const Rende
 		double step = RSG::camera_attributes->camera_attributes_get_auto_exposure_adjust_speed(p_render_data->camera_attributes) * time_step;
 		float auto_exposure_min_sensitivity = RSG::camera_attributes->camera_attributes_get_auto_exposure_min_sensitivity(p_render_data->camera_attributes);
 		float auto_exposure_max_sensitivity = RSG::camera_attributes->camera_attributes_get_auto_exposure_max_sensitivity(p_render_data->camera_attributes);
-		luminance->luminance_reduction(rb->get_internal_texture(), rb->get_internal_size(), luminance_buffers, auto_exposure_min_sensitivity, auto_exposure_max_sensitivity, step, set_immediate);
+		luminance->luminance_reduction(color_texture, color_size, luminance_buffers, auto_exposure_min_sensitivity, auto_exposure_max_sensitivity, step, set_immediate);
 
 		// Swap final reduce with prev luminance.
 
@@ -554,7 +556,7 @@ void RendererSceneRenderRD::_render_buffers_post_process_and_tonemap(const Rende
 					if (RSG::camera_attributes->camera_attributes_uses_auto_exposure(p_render_data->camera_attributes)) {
 						luminance_texture = luminance->get_current_luminance_buffer(rb); // this will return and empty RID if we don't have an auto exposure buffer
 					}
-					RID source = rb->get_internal_texture(l);
+					RID source = has_color_output ? rb->get_texture_slice(RB_SCOPE_BUFFERS, RB_TEX_COLOR_OUTPUT, l, 0) : rb->get_internal_texture(l);
 					RID dest = rb->get_texture_slice(RB_SCOPE_BUFFERS, RB_TEX_BLUR_1, l, i);
 					if (can_use_storage) {
 						copy_effects->gaussian_glow(source, dest, vp_size, environment_get_glow_strength(p_render_data->environment), true, environment_get_glow_hdr_luminance_cap(p_render_data->environment), environment_get_exposure(p_render_data->environment), environment_get_glow_bloom(p_render_data->environment), environment_get_glow_hdr_bleed_threshold(p_render_data->environment), environment_get_glow_hdr_bleed_scale(p_render_data->environment), luminance_texture, auto_exposure_scale);

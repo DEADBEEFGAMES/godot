@@ -48,6 +48,7 @@
 #define RB_TEXTURE SNAME("texture")
 #define RB_TEX_COLOR SNAME("color")
 #define RB_TEX_COLOR_MSAA SNAME("color_msaa")
+#define RB_TEX_COLOR_OUTPUT SNAME("color_output") // Target-size buffer for compute/custom passes when scaling (get_color_layer returns this)
 #define RB_TEX_COLOR_UPSCALED SNAME("color_upscaled")
 #define RB_TEX_DEPTH SNAME("depth")
 #define RB_TEX_DEPTH_MSAA SNAME("depth_msaa")
@@ -361,6 +362,8 @@ private:
 			} else {
 				return RID();
 			}
+		} else if (has_texture(RB_SCOPE_BUFFERS, RB_TEX_COLOR_OUTPUT)) {
+			return get_texture(RB_SCOPE_BUFFERS, RB_TEX_COLOR_OUTPUT);
 		} else if (has_internal_texture()) {
 			return get_internal_texture();
 		} else {
@@ -375,6 +378,9 @@ private:
 			} else {
 				return RID();
 			}
+		} else if (has_texture(RB_SCOPE_BUFFERS, RB_TEX_COLOR_OUTPUT)) {
+			// When scaling: return target-size buffer so compute/custom passes get full res.
+			return get_texture_slice(RB_SCOPE_BUFFERS, RB_TEX_COLOR_OUTPUT, p_layer, 0);
 		} else if (has_internal_texture()) {
 			return get_internal_texture(p_layer);
 		} else {

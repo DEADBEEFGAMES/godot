@@ -2403,6 +2403,18 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 
 	RD::get_singleton()->draw_command_end_label();
 
+	// When using target-size color_output (3D scaling), fill it before POST_TRANSPARENT so compositor effects see the 3D scene and can write to it; post_process will not overwrite.
+	if (rb->has_texture(RB_SCOPE_BUFFERS, RB_TEX_COLOR_OUTPUT)) {
+		Size2i target_size = rb->get_target_size();
+		RD::get_singleton()->draw_command_begin_label("Upscale internal to color_output (pre-compositor)");
+		for (uint32_t v = 0; v < rb->get_view_count(); v++) {
+			RID output_tex = rb->get_texture_slice(RB_SCOPE_BUFFERS, RB_TEX_COLOR_OUTPUT, v, 0);
+			RID output_fb = FramebufferCacheRD::get_singleton()->get_cache(output_tex);
+			copy_effects->copy_to_fb_rect(rb->get_internal_texture(v), output_fb, Rect2i(0, 0, target_size.x, target_size.y), false, false, false, false, RID(), false, false, false, false, Rect2(0, 0, 1, 1));
+		}
+		RD::get_singleton()->draw_command_end_label();
+	}
+
 	{
 		RENDER_TIMESTAMP("Process Post Transparent Compositor Effects");
 		_process_compositor_effects(RS::COMPOSITOR_EFFECT_CALLBACK_TYPE_POST_TRANSPARENT, p_render_data);

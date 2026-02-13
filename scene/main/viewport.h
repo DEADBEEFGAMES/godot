@@ -312,6 +312,8 @@ private:
 
 	Scaling3DMode scaling_3d_mode = SCALING_3D_MODE_BILINEAR;
 	float scaling_3d_scale = 1.0;
+	/** When 3D scaling is used: final render target size. (0,0) = use viewport size. Use to keep output at native res. */
+	Size2i scaling_3d_output_size = Size2i(0, 0);
 	float fsr_sharpness = 0.2f;
 	float texture_mipmap_bias = 0.0f;
 	AnisotropicFiltering anisotropic_filtering_level = ANISOTROPY_4X;
@@ -569,6 +571,8 @@ public:
 
 	void set_scaling_3d_scale(float p_scaling_3d_scale);
 	float get_scaling_3d_scale() const;
+	void set_scaling_3d_output_size(const Size2i &p_size);
+	Size2i get_scaling_3d_output_size() const;
 
 	void set_fsr_sharpness(float p_fsr_sharpness);
 	float get_fsr_sharpness() const;
