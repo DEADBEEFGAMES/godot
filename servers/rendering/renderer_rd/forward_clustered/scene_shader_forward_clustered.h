@@ -251,6 +251,13 @@ public:
 		uint32_t index = 0;
 
 		_FORCE_INLINE_ bool uses_alpha_pass() const {
+			// depth_test_disabled + depth_draw_always: force opaque pass so we keep
+			// normal_roughness attachments and depth writes even when reading
+			// hint_depth_texture / hint_screen_texture.
+			if (depth_test == DEPTH_TEST_DISABLED && depth_draw == DEPTH_DRAW_ALWAYS) {
+				return false;
+			}
+
 			bool has_read_screen_alpha = uses_screen_texture || uses_depth_texture || uses_normal_texture;
 			bool has_base_alpha = (uses_alpha && (!uses_alpha_clip || uses_alpha_antialiasing)) || has_read_screen_alpha;
 			bool has_blend_alpha = uses_blend_alpha;

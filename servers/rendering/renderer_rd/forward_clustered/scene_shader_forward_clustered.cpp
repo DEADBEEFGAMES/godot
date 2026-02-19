@@ -304,6 +304,12 @@ void SceneShaderForwardClustered::ShaderData::_create_pipeline(PipelineKey p_pip
 		depth_stencil_state.enable_depth_test = true;
 		depth_stencil_state.depth_compare_operator = RD::COMPARE_OP_GREATER_OR_EQUAL;
 		depth_stencil_state.enable_depth_write = depth_draw != DEPTH_DRAW_DISABLED ? true : false;
+	} else if (depth_draw == DEPTH_DRAW_ALWAYS) {
+		// depth_test_disabled + depth_draw_always: no test, but still write depth
+		// (e.g. portal that always renders and writes custom DEPTH from shader).
+		depth_stencil_state.enable_depth_test = true;
+		depth_stencil_state.depth_compare_operator = RD::COMPARE_OP_ALWAYS;
+		depth_stencil_state.enable_depth_write = true;
 	}
 	bool depth_pre_pass_enabled = bool(GLOBAL_GET("rendering/driver/depth_prepass/enable"));
 

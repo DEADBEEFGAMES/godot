@@ -1158,7 +1158,8 @@ void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, con
 					rl->add_element(surf);
 				}
 			} else {
-				if (surf->flags & (GeometryInstanceSurfaceDataCache::FLAG_PASS_DEPTH | GeometryInstanceSurfaceDataCache::FLAG_PASS_OPAQUE)) {
+				if ((surf->flags & (GeometryInstanceSurfaceDataCache::FLAG_PASS_DEPTH | GeometryInstanceSurfaceDataCache::FLAG_PASS_OPAQUE)) &&
+						!(surf->flags & GeometryInstanceSurfaceDataCache::FLAG_SKIP_DEPTH_PREPASS)) {
 					rl->add_element(surf);
 				}
 			}
@@ -4010,8 +4011,16 @@ void RenderForwardClustered::_geometry_instance_add_surface_with_material(Geomet
 		}
 	} else {
 		flags |= GeometryInstanceSurfaceDataCache::FLAG_PASS_OPAQUE;
-		flags |= GeometryInstanceSurfaceDataCache::FLAG_PASS_DEPTH;
-		flags |= GeometryInstanceSurfaceDataCache::FLAG_PASS_SHADOW;
+		// depth_test_disabled + depth_draw_always: skip depth pre-pass and shadow pass
+		// so the portal mesh's geometry depth doesn't pollute the depth buffer.
+		bool skip_prepass = (p_material->shader_data->depth_test == SceneShaderForwardClustered::ShaderData::DEPTH_TEST_DISABLED &&
+				p_material->shader_data->depth_draw == SceneShaderForwardClustered::ShaderData::DEPTH_DRAW_ALWAYS);
+		if (!skip_prepass) {
+			flags |= GeometryInstanceSurfaceDataCache::FLAG_PASS_DEPTH;
+			flags |= GeometryInstanceSurfaceDataCache::FLAG_PASS_SHADOW;
+		} else {
+			flags |= GeometryInstanceSurfaceDataCache::FLAG_SKIP_DEPTH_PREPASS;
+		}
 	}
 
 	if (p_material->shader_data->uses_particle_trails) {
