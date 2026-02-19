@@ -3931,16 +3931,20 @@ RID RenderingDevice::render_pipeline_create(RID p_shader, FramebufferFormatID p_
 	ERR_FAIL_INDEX_V(p_blend_state.logic_op, LOGIC_OP_MAX, RID());
 
 	const FramebufferPass &pass = fb_format.E->key().passes[p_for_render_pass];
-	ERR_FAIL_COND_V(p_blend_state.attachments.size() < pass.color_attachments.size(), RID());
+	// Pad blend state with disabled attachments if the pass has more color attachments (e.g. viewport config mismatch).
+	PipelineColorBlendState blend_state = p_blend_state;
+	while (blend_state.attachments.size() < (uint32_t)pass.color_attachments.size()) {
+		blend_state.attachments.push_back(PipelineColorBlendState::Attachment());
+	}
 	for (int i = 0; i < pass.color_attachments.size(); i++) {
 		if (pass.color_attachments[i] != ATTACHMENT_UNUSED) {
-			ERR_FAIL_INDEX_V(p_blend_state.attachments[i].src_color_blend_factor, BLEND_FACTOR_MAX, RID());
-			ERR_FAIL_INDEX_V(p_blend_state.attachments[i].dst_color_blend_factor, BLEND_FACTOR_MAX, RID());
-			ERR_FAIL_INDEX_V(p_blend_state.attachments[i].color_blend_op, BLEND_OP_MAX, RID());
+			ERR_FAIL_INDEX_V(blend_state.attachments[i].src_color_blend_factor, BLEND_FACTOR_MAX, RID());
+			ERR_FAIL_INDEX_V(blend_state.attachments[i].dst_color_blend_factor, BLEND_FACTOR_MAX, RID());
+			ERR_FAIL_INDEX_V(blend_state.attachments[i].color_blend_op, BLEND_OP_MAX, RID());
 
-			ERR_FAIL_INDEX_V(p_blend_state.attachments[i].src_alpha_blend_factor, BLEND_FACTOR_MAX, RID());
-			ERR_FAIL_INDEX_V(p_blend_state.attachments[i].dst_alpha_blend_factor, BLEND_FACTOR_MAX, RID());
-			ERR_FAIL_INDEX_V(p_blend_state.attachments[i].alpha_blend_op, BLEND_OP_MAX, RID());
+			ERR_FAIL_INDEX_V(blend_state.attachments[i].src_alpha_blend_factor, BLEND_FACTOR_MAX, RID());
+			ERR_FAIL_INDEX_V(blend_state.attachments[i].dst_alpha_blend_factor, BLEND_FACTOR_MAX, RID());
+			ERR_FAIL_INDEX_V(blend_state.attachments[i].alpha_blend_op, BLEND_OP_MAX, RID());
 		}
 	}
 
@@ -3963,7 +3967,7 @@ RID RenderingDevice::render_pipeline_create(RID p_shader, FramebufferFormatID p_
 			p_rasterization_state,
 			p_multisample_state,
 			p_depth_stencil_state,
-			p_blend_state,
+			blend_state,
 			pass.color_attachments,
 			p_dynamic_state_flags,
 			fb_format.render_pass,

@@ -1310,6 +1310,40 @@ Ref<ViewportTexture> Viewport::get_texture() const {
 	return default_texture;
 }
 
+Ref<Texture2D> Viewport::get_depth_texture() const {
+	ERR_READ_THREAD_GUARD_V(Ref<Texture2D>());
+	RID vp_rid = get_viewport_rid();
+	if (vp_rid.is_null()) {
+		return Ref<Texture2D>();
+	}
+	RID depth_rid = RS::get_singleton()->viewport_get_depth_texture(vp_rid);
+	if (depth_rid.is_null()) {
+		return Ref<Texture2D>();
+	}
+	if (!depth_texture_cache.is_valid()) {
+		depth_texture_cache.instantiate();
+	}
+	depth_texture_cache->set_texture_rd_rid(depth_rid);
+	return depth_texture_cache;
+}
+
+Ref<Texture2D> Viewport::get_normal_texture() const {
+	ERR_READ_THREAD_GUARD_V(Ref<Texture2D>());
+	RID vp_rid = get_viewport_rid();
+	if (vp_rid.is_null()) {
+		return Ref<Texture2D>();
+	}
+	RID normal_rid = RS::get_singleton()->viewport_get_normal_texture(vp_rid);
+	if (normal_rid.is_null()) {
+		return Ref<Texture2D>();
+	}
+	if (!normal_texture_cache.is_valid()) {
+		normal_texture_cache.instantiate();
+	}
+	normal_texture_cache->set_texture_rd_rid(normal_rid);
+	return normal_texture_cache;
+}
+
 void Viewport::set_positional_shadow_atlas_size(int p_size) {
 	ERR_MAIN_THREAD_GUARD;
 	positional_shadow_atlas_size = p_size;
@@ -4825,6 +4859,8 @@ void Viewport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_render_info", "type", "info"), &Viewport::get_render_info);
 
 	ClassDB::bind_method(D_METHOD("get_texture"), &Viewport::get_texture);
+	ClassDB::bind_method(D_METHOD("get_depth_texture"), &Viewport::get_depth_texture);
+	ClassDB::bind_method(D_METHOD("get_normal_texture"), &Viewport::get_normal_texture);
 
 	ClassDB::bind_method(D_METHOD("set_physics_object_picking", "enable"), &Viewport::set_physics_object_picking);
 	ClassDB::bind_method(D_METHOD("get_physics_object_picking"), &Viewport::get_physics_object_picking);

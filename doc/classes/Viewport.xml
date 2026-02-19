@@ -124,6 +124,18 @@
 				[b]Note:[/b] When [member use_hdr_2d] is [code]true[/code] the returned texture will be an HDR image encoded in linear space.
 			</description>
 		</method>
+		<method name="get_depth_texture" qualifiers="const">
+			<return type="Texture2D" />
+			<description>
+				Returns the viewport's depth buffer as a [Texture2D] usable in materials (e.g. with [Texture2DRD]). Returns an empty [Ref] if 3D is disabled or the viewport has no depth buffer. The returned texture is in a format compatible with depth sampling in shaders.
+			</description>
+		</method>
+		<method name="get_normal_texture" qualifiers="const">
+			<return type="Texture2D" />
+			<description>
+				Returns the viewport's normal/roughness buffer as a [Texture2D] usable in materials (e.g. with [Texture2DRD]). Only available when using the forward clustered renderer; returns an empty [Ref] otherwise.
+			</description>
+		</method>
 		<method name="get_viewport_rid" qualifiers="const">
 			<return type="RID" />
 			<description>
