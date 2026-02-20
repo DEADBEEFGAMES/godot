@@ -842,6 +842,78 @@ Node *ResourceImporterScene::_pre_fix_node(Node *p_node, Node *p_root, HashMap<R
 			colshape->set_owner(sb->get_owner());
 		}
 
+	} else if (_teststr(name, "areaonly")) {
+		if (isroot) {
+			return p_node;
+		}
+
+		String fixed_name = _fixstr(name, "areaonly");
+
+		if (fixed_name.is_empty()) {
+			p_node->set_owner(nullptr);
+			memdelete(p_node);
+			ERR_FAIL_V_MSG(nullptr, vformat("Skipped node `%s` because its name is empty after removing the suffix.", name));
+		}
+
+		ImporterMeshInstance3D *mi = Object::cast_to<ImporterMeshInstance3D>(p_node);
+		if (mi) {
+			Ref<ImporterMesh> mesh = mi->get_mesh();
+
+			if (mesh.is_valid()) {
+				Vector<Ref<Shape3D>> shapes;
+				if (r_collision_map.has(mesh)) {
+					shapes = r_collision_map[mesh];
+				} else {
+					_pre_gen_shape_list(mesh, shapes, false);
+					r_collision_map[mesh] = shapes;
+				}
+
+				if (shapes.size()) {
+					Area3D *area = memnew(Area3D);
+					area->set_transform(mi->get_transform());
+					area->set_name(fixed_name);
+					_copy_meta(p_node, area);
+					p_node->replace_by(area);
+					p_node->set_owner(nullptr);
+					memdelete(p_node);
+					p_node = area;
+
+					_add_shapes(area, shapes);
+				}
+			}
+
+		} else if (p_node->has_meta("empty_draw_type")) {
+			String empty_draw_type = String(p_node->get_meta("empty_draw_type"));
+			Area3D *area = memnew(Area3D);
+			area->set_name(fixed_name);
+			Object::cast_to<Node3D>(area)->set_transform(Object::cast_to<Node3D>(p_node)->get_transform());
+			_copy_meta(p_node, area);
+			p_node->replace_by(area);
+			p_node->set_owner(nullptr);
+			memdelete(p_node);
+			p_node = area;
+			CollisionShape3D *colshape = memnew(CollisionShape3D);
+			if (empty_draw_type == "CUBE") {
+				BoxShape3D *boxShape = memnew(BoxShape3D);
+				boxShape->set_size(Vector3(2, 2, 2));
+				colshape->set_shape(boxShape);
+			} else if (empty_draw_type == "SINGLE_ARROW") {
+				SeparationRayShape3D *rayShape = memnew(SeparationRayShape3D);
+				rayShape->set_length(1);
+				colshape->set_shape(rayShape);
+				Object::cast_to<Node3D>(area)->rotate_x(Math_PI / 2);
+			} else if (empty_draw_type == "IMAGE") {
+				WorldBoundaryShape3D *world_boundary_shape = memnew(WorldBoundaryShape3D);
+				colshape->set_shape(world_boundary_shape);
+			} else {
+				SphereShape3D *sphereShape = memnew(SphereShape3D);
+				sphereShape->set_radius(1);
+				colshape->set_shape(sphereShape);
+			}
+			area->add_child(colshape, true);
+			colshape->set_owner(area->get_owner());
+		}
+
 	} else if (_teststr(name, "rigid") && Object::cast_to<ImporterMeshInstance3D>(p_node)) {
 		if (isroot) {
 			return p_node;
@@ -907,6 +979,38 @@ Node *ResourceImporterScene::_pre_fix_node(Node *p_node, Node *p_root, HashMap<R
 				col->set_owner(mi->get_owner());
 
 				_add_shapes(col, shapes);
+			}
+		}
+
+	} else if (_teststr(name, "area") && Object::cast_to<ImporterMeshInstance3D>(p_node)) {
+		ImporterMeshInstance3D *mi = Object::cast_to<ImporterMeshInstance3D>(p_node);
+
+		Ref<ImporterMesh> mesh = mi->get_mesh();
+
+		if (mesh.is_valid()) {
+			Vector<Ref<Shape3D>> shapes;
+			String fixed_name;
+			if (r_collision_map.has(mesh)) {
+				shapes = r_collision_map[mesh];
+			} else {
+				_pre_gen_shape_list(mesh, shapes, false);
+				r_collision_map[mesh] = shapes;
+			}
+
+			fixed_name = _fixstr(name, "area");
+
+			if (!fixed_name.is_empty()) {
+				if (mi->get_parent() && !mi->get_parent()->has_node(fixed_name)) {
+					mi->set_name(fixed_name);
+				}
+			}
+
+			if (shapes.size()) {
+				Area3D *area = memnew(Area3D);
+				mi->add_child(area, true);
+				area->set_owner(mi->get_owner());
+
+				_add_shapes(area, shapes);
 			}
 		}
 
@@ -1004,8 +1108,13 @@ Node *ResourceImporterScene::_pre_fix_node(Node *p_node, Node *p_root, HashMap<R
 		Ref<ImporterMesh> mesh = mi->get_mesh();
 		if (mesh.is_valid()) {
 			Vector<Ref<Shape3D>> shapes;
+			bool use_area = _teststr(mesh->get_name(), "area");
 			if (r_collision_map.has(mesh)) {
 				shapes = r_collision_map[mesh];
+			} else if (use_area) {
+				_pre_gen_shape_list(mesh, shapes, false);
+				r_collision_map[mesh] = shapes;
+				mesh->set_name(_fixstr(mesh->get_name(), "area"));
 			} else if (_teststr(mesh->get_name(), "col")) {
 				_pre_gen_shape_list(mesh, shapes, false);
 				r_collision_map[mesh] = shapes;
@@ -1022,11 +1131,19 @@ Node *ResourceImporterScene::_pre_fix_node(Node *p_node, Node *p_root, HashMap<R
 			}
 
 			if (shapes.size()) {
-				StaticBody3D *col = memnew(StaticBody3D);
-				p_node->add_child(col, true);
-				col->set_owner(p_node->get_owner());
+				if (use_area) {
+					Area3D *area = memnew(Area3D);
+					p_node->add_child(area, true);
+					area->set_owner(p_node->get_owner());
 
-				_add_shapes(col, shapes);
+					_add_shapes(area, shapes);
+				} else {
+					StaticBody3D *col = memnew(StaticBody3D);
+					p_node->add_child(col, true);
+					col->set_owner(p_node->get_owner());
+
+					_add_shapes(col, shapes);
+				}
 			}
 		}
 	}
