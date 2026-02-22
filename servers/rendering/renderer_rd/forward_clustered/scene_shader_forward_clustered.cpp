@@ -348,10 +348,13 @@ void SceneShaderForwardClustered::ShaderData::_create_pipeline(PipelineKey p_pip
 		} else {
 			blend_state = blend_state_color_opaque;
 
-			if (depth_pre_pass_enabled) {
+			if (depth_pre_pass_enabled && !(depth_test == DEPTH_TEST_DISABLED && depth_draw == DEPTH_DRAW_ALWAYS)) {
 				// We already have a depth from the depth pre-pass, there is no need to write it again.
 				// In addition we can use COMPARE_OP_EQUAL instead of COMPARE_OP_LESS_OR_EQUAL.
 				// This way we can use the early depth test to discard transparent fragments before the fragment shader even starts.
+				// Exception: shaders that disable depth test but always draw depth (e.g. portals)
+				// manage their own depth via gl_FragDepth and must not be constrained to the
+				// pre-pass depth values.
 				depth_stencil_state.depth_compare_operator = RD::COMPARE_OP_EQUAL;
 				depth_stencil_state.enable_depth_write = false;
 			}

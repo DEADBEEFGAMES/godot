@@ -172,7 +172,7 @@ private:
 
 	void _update_render_base_uniform_set();
 	RID _setup_sdfgi_render_pass_uniform_set(RID p_albedo_texture, RID p_emission_texture, RID p_emission_aniso_texture, RID p_geom_facing_texture, const RendererRD::MaterialStorage::Samplers &p_samplers);
-	RID _setup_render_pass_uniform_set(RenderListType p_render_list, const RenderDataRD *p_render_data, RID p_radiance_texture, const RendererRD::MaterialStorage::Samplers &p_samplers, bool p_use_directional_shadow_atlas = false, int p_index = 0);
+	RID _setup_render_pass_uniform_set(RenderListType p_render_list, const RenderDataRD *p_render_data, RID p_radiance_texture, const RendererRD::MaterialStorage::Samplers &p_samplers, bool p_use_directional_shadow_atlas = false, int p_index = 0, bool p_skip_normal_roughness = false);
 
 	struct BestFitNormal {
 		BestFitNormalShaderRD shader;
@@ -354,6 +354,8 @@ private:
 		bool used_screen_texture = false;
 		bool used_normal_texture = false;
 		bool used_depth_texture = false;
+		bool used_depth_texture_in_opaque = false;
+		uint32_t opaque_depth_read_split = 0;
 		bool used_sss = false;
 		bool used_lightmap = false;
 
@@ -426,6 +428,7 @@ private:
 			FLAG_USES_PARTICLE_TRAILS = 65536,
 			FLAG_USES_MOTION_VECTOR = 131072,
 			FLAG_SKIP_DEPTH_PREPASS = 262144,
+			FLAG_OPAQUE_DEPTH_TEXTURE_READ = 524288,
 		};
 
 		union {

@@ -908,6 +908,7 @@ void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, con
 		scene_state.used_screen_texture = false;
 		scene_state.used_normal_texture = false;
 		scene_state.used_depth_texture = false;
+		scene_state.used_depth_texture_in_opaque = false;
 		scene_state.used_lightmap = false;
 	}
 	uint32_t lightmap_captures_used = 0;
@@ -1148,6 +1149,9 @@ void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, con
 				}
 				if (surf->flags & GeometryInstanceSurfaceDataCache::FLAG_USES_DEPTH_TEXTURE) {
 					scene_state.used_depth_texture = true;
+				}
+				if (surf->flags & GeometryInstanceSurfaceDataCache::FLAG_OPAQUE_DEPTH_TEXTURE_READ) {
+					scene_state.used_depth_texture_in_opaque = true;
 				}
 			} else if (p_pass_mode == PASS_MODE_SHADOW || p_pass_mode == PASS_MODE_SHADOW_DP) {
 				if (surf->flags & GeometryInstanceSurfaceDataCache::FLAG_PASS_SHADOW) {
@@ -1883,6 +1887,29 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 	render_list[RENDER_LIST_MOTION].sort_by_key();
 	render_list[RENDER_LIST_ALPHA].sort_by_reverse_depth_and_priority();
 
+	if (scene_state.used_depth_texture_in_opaque) {
+		auto &elems = render_list[RENDER_LIST_OPAQUE].elements;
+		LocalVector<GeometryInstanceSurfaceDataCache *> non_depth_read;
+		LocalVector<GeometryInstanceSurfaceDataCache *> depth_read;
+		non_depth_read.reserve(elems.size());
+		for (uint32_t i = 0; i < elems.size(); i++) {
+			if (elems[i]->flags & GeometryInstanceSurfaceDataCache::FLAG_OPAQUE_DEPTH_TEXTURE_READ) {
+				depth_read.push_back(elems[i]);
+			} else {
+				non_depth_read.push_back(elems[i]);
+			}
+		}
+		scene_state.opaque_depth_read_split = non_depth_read.size();
+		for (uint32_t i = 0; i < non_depth_read.size(); i++) {
+			elems[i] = non_depth_read[i];
+		}
+		for (uint32_t i = 0; i < depth_read.size(); i++) {
+			elems[scene_state.opaque_depth_read_split + i] = depth_read[i];
+		}
+	} else {
+		scene_state.opaque_depth_read_split = render_list[RENDER_LIST_OPAQUE].elements.size();
+	}
+
 	int *render_info = p_render_data->render_info ? p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE] : (int *)nullptr;
 	_fill_instance_data(RENDER_LIST_OPAQUE, render_info);
 	_fill_instance_data(RENDER_LIST_MOTION, render_info);
@@ -2096,7 +2123,8 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		RID rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_OPAQUE, nullptr, RID(), samplers);
 
 		bool finish_depth = using_ssao || using_ssil || using_sdfgi || using_voxelgi || ce_pre_opaque_resolved_depth || ce_post_opaque_resolved_depth;
-		RenderListParameters render_list_params(render_list[RENDER_LIST_OPAQUE].elements.ptr(), render_list[RENDER_LIST_OPAQUE].element_info.ptr(), render_list[RENDER_LIST_OPAQUE].elements.size(), reverse_cull, depth_pass_mode, 0, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
+		uint32_t depth_prepass_count = scene_state.opaque_depth_read_split;
+		RenderListParameters render_list_params(render_list[RENDER_LIST_OPAQUE].elements.ptr(), render_list[RENDER_LIST_OPAQUE].element_info.ptr(), depth_prepass_count, reverse_cull, depth_pass_mode, 0, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
 		_render_list_with_draw_list(&render_list_params, depth_framebuffer, RD::DrawFlags(needs_pre_resolve ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_ALL), depth_pass_clear, 0.0f, 0u, p_render_data->render_region);
 
 		RD::get_singleton()->draw_command_end_label();
@@ -2162,7 +2190,6 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 			if (!load_color) {
 				Color cc = clear_color.srgb_to_linear();
 				if (using_separate_specular || rb_data.is_valid()) {
-					// Effects that rely on separate specular, like subsurface scattering, must clear the alpha to zero.
 					cc.a = 0;
 				}
 				c.push_back(cc);
@@ -2175,8 +2202,42 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 
 			uint32_t opaque_color_pass_flags = using_motion_pass ? (color_pass_flags & ~uint32_t(COLOR_PASS_FLAG_MOTION_VECTORS)) : color_pass_flags;
 			RID opaque_framebuffer = using_motion_pass ? rb_data->get_color_pass_fb(opaque_color_pass_flags) : color_framebuffer;
-			RenderListParameters render_list_params(render_list[RENDER_LIST_OPAQUE].elements.ptr(), render_list[RENDER_LIST_OPAQUE].element_info.ptr(), render_list[RENDER_LIST_OPAQUE].elements.size(), reverse_cull, PASS_MODE_COLOR, opaque_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
-			_render_list_with_draw_list(&render_list_params, opaque_framebuffer, RD::DrawFlags(load_color ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_COLOR_ALL) | (depth_pre_pass ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_DEPTH), c, 0.0f, 0u, p_render_data->render_region);
+
+			uint32_t split = scene_state.opaque_depth_read_split;
+			uint32_t total = render_list[RENDER_LIST_OPAQUE].elements.size();
+			bool has_opaque_depth_read = scene_state.used_depth_texture_in_opaque && split < total;
+
+			if (has_opaque_depth_read) {
+				RenderListParameters render_list_params(render_list[RENDER_LIST_OPAQUE].elements.ptr(), render_list[RENDER_LIST_OPAQUE].element_info.ptr(), split, reverse_cull, PASS_MODE_COLOR, opaque_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
+				_render_list_with_draw_list(&render_list_params, opaque_framebuffer, RD::DrawFlags(load_color ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_COLOR_ALL) | (depth_pre_pass ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_DEPTH), c, 0.0f, 0u, p_render_data->render_region);
+
+				RENDER_TIMESTAMP("Copy Depth Texture (Opaque Mid-Pass)");
+				RD::get_singleton()->draw_command_begin_label("Copy Depth Texture (Opaque Mid-Pass)");
+				if (use_msaa) {
+					for (uint32_t v = 0; v < rb->get_view_count(); v++) {
+						resolve_effects->resolve_depth(rb->get_depth_msaa(v), rb->get_depth_texture(v), rb->get_internal_size(), texture_multisamples[msaa]);
+					}
+				}
+				_render_buffers_copy_depth_texture(p_render_data);
+				RD::get_singleton()->draw_command_end_label();
+
+				rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_OPAQUE, p_render_data, radiance_texture, samplers, true);
+
+				uint32_t depth_read_count = total - split;
+				RenderListParameters render_list_params_dr(render_list[RENDER_LIST_OPAQUE].elements.ptr() + split, render_list[RENDER_LIST_OPAQUE].element_info.ptr() + split, depth_read_count, reverse_cull, PASS_MODE_COLOR, opaque_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, split, base_specialization);
+				_render_list_with_draw_list(&render_list_params_dr, opaque_framebuffer, RD::DRAW_DEFAULT_ALL, Vector<Color>(), 0.0f, 0u, p_render_data->render_region);
+
+				if (depth_pass_mode >= PASS_MODE_DEPTH_NORMAL_ROUGHNESS) {
+					RD::get_singleton()->draw_command_begin_label("Update Depth-Read Normals");
+					RID nr_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_OPAQUE, p_render_data, radiance_texture, samplers, true, 0, true);
+					RenderListParameters render_list_params_nr(render_list[RENDER_LIST_OPAQUE].elements.ptr() + split, render_list[RENDER_LIST_OPAQUE].element_info.ptr() + split, depth_read_count, reverse_cull, depth_pass_mode, 0, rb_data.is_null(), p_render_data->directional_light_soft_shadows, nr_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, split, base_specialization);
+					_render_list_with_draw_list(&render_list_params_nr, depth_framebuffer, RD::DRAW_DEFAULT_ALL, Vector<Color>(), 0.0f, 0u, p_render_data->render_region);
+					RD::get_singleton()->draw_command_end_label();
+				}
+			} else {
+				RenderListParameters render_list_params(render_list[RENDER_LIST_OPAQUE].elements.ptr(), render_list[RENDER_LIST_OPAQUE].element_info.ptr(), total, reverse_cull, PASS_MODE_COLOR, opaque_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
+				_render_list_with_draw_list(&render_list_params, opaque_framebuffer, RD::DrawFlags(load_color ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_COLOR_ALL) | (depth_pre_pass ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_DEPTH), c, 0.0f, 0u, p_render_data->render_region);
+			}
 		}
 
 		RD::get_singleton()->draw_command_end_label();
@@ -3241,7 +3302,7 @@ void RenderForwardClustered::_update_render_base_uniform_set() {
 	}
 }
 
-RID RenderForwardClustered::_setup_render_pass_uniform_set(RenderListType p_render_list, const RenderDataRD *p_render_data, RID p_radiance_texture, const RendererRD::MaterialStorage::Samplers &p_samplers, bool p_use_directional_shadow_atlas, int p_index) {
+RID RenderForwardClustered::_setup_render_pass_uniform_set(RenderListType p_render_list, const RenderDataRD *p_render_data, RID p_radiance_texture, const RendererRD::MaterialStorage::Samplers &p_samplers, bool p_use_directional_shadow_atlas, int p_index, bool p_skip_normal_roughness) {
 	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
 	RendererRD::LightStorage *light_storage = RendererRD::LightStorage::get_singleton();
 
@@ -3490,7 +3551,12 @@ RID RenderForwardClustered::_setup_render_pass_uniform_set(RenderListType p_rend
 		RD::Uniform u;
 		u.binding = 26;
 		u.uniform_type = RD::UNIFORM_TYPE_TEXTURE;
-		RID texture = rb_data.is_valid() && rb_data->has_normal_roughness() ? rb_data->get_normal_roughness() : texture_storage->texture_rd_get_default(is_multiview ? RendererRD::TextureStorage::DEFAULT_RD_TEXTURE_2D_ARRAY_NORMAL : RendererRD::TextureStorage::DEFAULT_RD_TEXTURE_NORMAL);
+		RID texture;
+		if (p_skip_normal_roughness) {
+			texture = texture_storage->texture_rd_get_default(is_multiview ? RendererRD::TextureStorage::DEFAULT_RD_TEXTURE_2D_ARRAY_NORMAL : RendererRD::TextureStorage::DEFAULT_RD_TEXTURE_NORMAL);
+		} else {
+			texture = rb_data.is_valid() && rb_data->has_normal_roughness() ? rb_data->get_normal_roughness() : texture_storage->texture_rd_get_default(is_multiview ? RendererRD::TextureStorage::DEFAULT_RD_TEXTURE_2D_ARRAY_NORMAL : RendererRD::TextureStorage::DEFAULT_RD_TEXTURE_NORMAL);
+		}
 		u.append_id(texture);
 		uniforms.push_back(u);
 	}
@@ -4011,8 +4077,6 @@ void RenderForwardClustered::_geometry_instance_add_surface_with_material(Geomet
 		}
 	} else {
 		flags |= GeometryInstanceSurfaceDataCache::FLAG_PASS_OPAQUE;
-		// depth_test_disabled + depth_draw_always: skip depth pre-pass and shadow pass
-		// so the portal mesh's geometry depth doesn't pollute the depth buffer.
 		bool skip_prepass = (p_material->shader_data->depth_test == SceneShaderForwardClustered::ShaderData::DEPTH_TEST_DISABLED &&
 				p_material->shader_data->depth_draw == SceneShaderForwardClustered::ShaderData::DEPTH_DRAW_ALWAYS);
 		if (!skip_prepass) {
@@ -4020,6 +4084,9 @@ void RenderForwardClustered::_geometry_instance_add_surface_with_material(Geomet
 			flags |= GeometryInstanceSurfaceDataCache::FLAG_PASS_SHADOW;
 		} else {
 			flags |= GeometryInstanceSurfaceDataCache::FLAG_SKIP_DEPTH_PREPASS;
+			if (p_material->shader_data->uses_depth_texture) {
+				flags |= GeometryInstanceSurfaceDataCache::FLAG_OPAQUE_DEPTH_TEXTURE_READ;
+			}
 		}
 	}
 
