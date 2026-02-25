@@ -6,6 +6,7 @@
 	<description>
 		A list of utility functions and annotations accessible from any script written in GDScript.
 		For the list of global functions and constants that can be accessed in any scripting language, see [@GlobalScope].
+		When a local, member, or static method shadows a global identifier, use [code]GlobalScope.name[/code] to access the global one explicitly (for example [code]GlobalScope.print()[/code] or [code]GlobalScope.PI[/code]).
 	</description>
 	<tutorials>
 		<link title="GDScript exports">$DOCS_URL/tutorials/scripting/gdscript/gdscript_exports.html</link>

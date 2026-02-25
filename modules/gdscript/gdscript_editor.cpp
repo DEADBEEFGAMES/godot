@@ -1199,6 +1199,37 @@ static void _find_identifiers_in_base(const GDScriptCompletionIdentifier &p_base
 	}
 
 	while (!base_type.has_no_type()) {
+		if (base_type.kind == GDScriptParser::DataType::VARIANT && base_type.is_meta_type && base_type.enum_type == SNAME("GlobalScope")) {
+			if (!p_types_only) {
+				if (!p_only_functions) {
+					const int global_constant_count = CoreConstants::get_global_constant_count();
+					for (int i = 0; i < global_constant_count; i++) {
+						ScriptLanguage::CodeCompletionOption option(CoreConstants::get_global_constant_name(i), ScriptLanguage::CODE_COMPLETION_KIND_CONSTANT, ScriptLanguage::LOCATION_OTHER);
+						r_result.insert(option.display, option);
+					}
+				}
+
+				List<StringName> utility_functions;
+				Variant::get_utility_function_list(&utility_functions);
+				for (const StringName &E : utility_functions) {
+					ScriptLanguage::CodeCompletionOption option(E, ScriptLanguage::CODE_COMPLETION_KIND_FUNCTION, ScriptLanguage::LOCATION_OTHER);
+					option.insert_text += "(";
+					option.display += U"(\u2026)";
+					r_result.insert(option.display, option);
+				}
+
+				List<StringName> gdscript_functions;
+				GDScriptUtilityFunctions::get_function_list(&gdscript_functions);
+				for (const StringName &E : gdscript_functions) {
+					ScriptLanguage::CodeCompletionOption option(E, ScriptLanguage::CODE_COMPLETION_KIND_FUNCTION, ScriptLanguage::LOCATION_OTHER);
+					option.insert_text += "(";
+					option.display += U"(\u2026)";
+					r_result.insert(option.display, option);
+				}
+			}
+			return;
+		}
+
 		switch (base_type.kind) {
 			case GDScriptParser::DataType::CLASS: {
 				_find_identifiers_in_class(base_type.class_type, p_only_functions, p_types_only, base_type.is_meta_type, false, r_result, p_recursion_depth);
@@ -4006,6 +4037,36 @@ static Error _lookup_symbol_from_base(const GDScriptParser::DataType &p_base, co
 			} break;
 			case GDScriptParser::DataType::VARIANT: {
 				if (base_type.is_meta_type) {
+					if (base_type.enum_type == SNAME("GlobalScope")) {
+						if (CoreConstants::is_global_enum(p_symbol)) {
+							r_result.type = ScriptLanguage::LOOKUP_RESULT_CLASS_ENUM;
+							r_result.class_name = "@GlobalScope";
+							r_result.class_member = p_symbol;
+							return OK;
+						}
+
+						if (CoreConstants::is_global_constant(p_symbol) || GDScriptLanguage::get_singleton()->has_any_global_constant(p_symbol)) {
+							r_result.type = ScriptLanguage::LOOKUP_RESULT_CLASS_CONSTANT;
+							r_result.class_name = "@GlobalScope";
+							r_result.class_member = p_symbol;
+							return OK;
+						}
+
+						if (Variant::has_utility_function(p_symbol)) {
+							r_result.type = ScriptLanguage::LOOKUP_RESULT_CLASS_METHOD;
+							r_result.class_name = "@GlobalScope";
+							r_result.class_member = p_symbol;
+							return OK;
+						}
+
+						if (GDScriptUtilityFunctions::function_exists(p_symbol)) {
+							r_result.type = ScriptLanguage::LOOKUP_RESULT_CLASS_METHOD;
+							r_result.class_name = "@GDScript";
+							r_result.class_member = p_symbol;
+							return OK;
+						}
+					}
+
 					const String enum_name = "Variant." + p_symbol;
 					if (CoreConstants::is_global_enum(enum_name)) {
 						r_result.type = ScriptLanguage::LOOKUP_RESULT_CLASS_ENUM;
@@ -4044,6 +4105,11 @@ static Error _lookup_symbol_from_base(const GDScriptParser::DataType &p_base, co
 	if (p_symbol == "Variant") {
 		r_result.type = ScriptLanguage::LOOKUP_RESULT_CLASS;
 		r_result.class_name = "Variant";
+		return OK;
+	}
+	if (p_symbol == "GlobalScope") {
+		r_result.type = ScriptLanguage::LOOKUP_RESULT_CLASS;
+		r_result.class_name = "@GlobalScope";
 		return OK;
 	}
 
@@ -4291,6 +4357,34 @@ static Error _lookup_symbol_from_base(const GDScriptParser::DataType &p_base, co
 			if (!subscript->is_attribute) {
 				break;
 			}
+
+			if (subscript->base->type == GDScriptParser::Node::IDENTIFIER && static_cast<const GDScriptParser::IdentifierNode *>(subscript->base)->name == SNAME("GlobalScope")) {
+				if (CoreConstants::is_global_enum(p_symbol)) {
+					r_result.type = ScriptLanguage::LOOKUP_RESULT_CLASS_ENUM;
+					r_result.class_name = "@GlobalScope";
+					r_result.class_member = p_symbol;
+					return OK;
+				}
+				if (CoreConstants::is_global_constant(p_symbol) || GDScriptLanguage::get_singleton()->has_any_global_constant(p_symbol)) {
+					r_result.type = ScriptLanguage::LOOKUP_RESULT_CLASS_CONSTANT;
+					r_result.class_name = "@GlobalScope";
+					r_result.class_member = p_symbol;
+					return OK;
+				}
+				if (Variant::has_utility_function(p_symbol)) {
+					r_result.type = ScriptLanguage::LOOKUP_RESULT_CLASS_METHOD;
+					r_result.class_name = "@GlobalScope";
+					r_result.class_member = p_symbol;
+					return OK;
+				}
+				if (GDScriptUtilityFunctions::function_exists(p_symbol)) {
+					r_result.type = ScriptLanguage::LOOKUP_RESULT_CLASS_METHOD;
+					r_result.class_name = "@GDScript";
+					r_result.class_member = p_symbol;
+					return OK;
+				}
+			}
+
 			GDScriptCompletionIdentifier base;
 
 			bool found_type = _get_subscript_type(context, subscript, base.type);

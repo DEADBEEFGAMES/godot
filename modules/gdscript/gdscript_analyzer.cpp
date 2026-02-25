@@ -3190,8 +3190,16 @@ void GDScriptAnalyzer::reduce_call(GDScriptParser::CallNode *p_call, bool p_is_a
 
 	GDScriptParser::Node::Type callee_type = p_call->get_callee_type();
 	GDScriptParser::DataType call_type;
+	bool is_global_scope_call = false;
+	if (!p_call->is_super && callee_type == GDScriptParser::Node::SUBSCRIPT) {
+		const GDScriptParser::SubscriptNode *subscript = static_cast<const GDScriptParser::SubscriptNode *>(p_call->callee);
+		if (subscript && subscript->is_attribute && subscript->base && subscript->base->type == GDScriptParser::Node::IDENTIFIER) {
+			const GDScriptParser::IdentifierNode *base_id = static_cast<const GDScriptParser::IdentifierNode *>(subscript->base);
+			is_global_scope_call = base_id->name == SNAME("GlobalScope");
+		}
+	}
 
-	if (!p_call->is_super && callee_type == GDScriptParser::Node::IDENTIFIER) {
+	if (!p_call->is_super && (callee_type == GDScriptParser::Node::IDENTIFIER || is_global_scope_call)) {
 		// Call to name directly.
 		StringName function_name = p_call->function_name;
 
@@ -3547,6 +3555,9 @@ void GDScriptAnalyzer::reduce_call(GDScriptParser::CallNode *p_call, bool p_is_a
 		}
 		if (base_id && GDScriptParser::get_builtin_type(base_id->name) < Variant::VARIANT_MAX) {
 			base_type = make_builtin_meta_type(GDScriptParser::get_builtin_type(base_id->name));
+		} else if (base_id && base_id->name == SNAME("GlobalScope")) {
+			reduce_identifier(base_id, true);
+			base_type = base_id->get_datatype();
 		} else {
 			reduce_expression(subscript->base);
 			base_type = subscript->base->get_datatype();
@@ -4316,6 +4327,145 @@ void GDScriptAnalyzer::reduce_identifier_from_base(GDScriptParser::IdentifierNod
 	}
 }
 
+bool GDScriptAnalyzer::reduce_global_identifier(GDScriptParser::IdentifierNode *p_identifier, bool p_can_be_builtin) {
+	const StringName name = p_identifier->name;
+
+	if (name == SNAME("GlobalScope")) {
+		if (!p_can_be_builtin) {
+			push_error(R"(Global scope cannot be used as a name on its own.)", p_identifier);
+		}
+
+		GDScriptParser::DataType global_scope;
+		global_scope.kind = GDScriptParser::DataType::VARIANT;
+		global_scope.type_source = GDScriptParser::DataType::ANNOTATED_EXPLICIT;
+		global_scope.is_constant = true;
+		global_scope.is_meta_type = true;
+		global_scope.is_pseudo_type = true;
+		global_scope.enum_type = SNAME("GlobalScope");
+		p_identifier->set_datatype(global_scope);
+		return true;
+	}
+
+	const Variant::Type builtin_type = GDScriptParser::get_builtin_type(name);
+	if (builtin_type < Variant::VARIANT_MAX) {
+		if (p_can_be_builtin) {
+			p_identifier->set_datatype(make_builtin_meta_type(builtin_type));
+		} else {
+			push_error(R"(Builtin type cannot be used as a name on its own.)", p_identifier);
+		}
+		return true;
+	}
+
+	if (class_exists(name)) {
+		p_identifier->set_datatype(make_native_meta_type(name));
+		return true;
+	}
+
+	if (ScriptServer::is_global_class(name)) {
+		p_identifier->set_datatype(make_global_class_meta_type(name, p_identifier));
+		return true;
+	}
+
+	// Try singletons.
+	// Do this before globals because this might be a singleton loading another one before it's compiled.
+	if (ProjectSettings::get_singleton()->has_autoload(name)) {
+		const ProjectSettings::AutoloadInfo &autoload = ProjectSettings::get_singleton()->get_autoload(name);
+		if (autoload.is_singleton) {
+			// Singleton exists, so it's at least a Node.
+			GDScriptParser::DataType result;
+			result.type_source = GDScriptParser::DataType::ANNOTATED_EXPLICIT;
+			result.kind = GDScriptParser::DataType::NATIVE;
+			result.builtin_type = Variant::OBJECT;
+			result.native_type = SNAME("Node");
+			if (ResourceLoader::get_resource_type(autoload.path) == "GDScript") {
+				Ref<GDScriptParserRef> single_parser = parser->get_depended_parser_for(autoload.path);
+				if (single_parser.is_valid()) {
+					Error err = single_parser->raise_status(GDScriptParserRef::INHERITANCE_SOLVED);
+					if (err == OK) {
+						result = type_from_metatype(single_parser->get_parser()->head->get_datatype());
+					}
+				}
+			} else if (ResourceLoader::get_resource_type(autoload.path) == "PackedScene") {
+				if (GDScriptLanguage::get_singleton()->has_any_global_constant(name)) {
+					const Variant constant = GDScriptLanguage::get_singleton()->get_any_global_constant(name);
+					Node *node = Object::cast_to<Node>(constant);
+					if (node != nullptr) {
+						Ref<GDScript> scr = node->get_script();
+						if (scr.is_valid()) {
+							Ref<GDScriptParserRef> single_parser = parser->get_depended_parser_for(scr->get_script_path());
+							if (single_parser.is_valid()) {
+								Error err = single_parser->raise_status(GDScriptParserRef::INHERITANCE_SOLVED);
+								if (err == OK) {
+									result = type_from_metatype(single_parser->get_parser()->head->get_datatype());
+								}
+							}
+						}
+					}
+				}
+			}
+			result.is_constant = true;
+			p_identifier->set_datatype(result);
+			return true;
+		}
+	}
+
+	if (CoreConstants::is_global_constant(name)) {
+		const int index = CoreConstants::get_global_constant_index(name);
+		const StringName enum_name = CoreConstants::get_global_constant_enum(index);
+		const int64_t value = CoreConstants::get_global_constant_value(index);
+		if (enum_name != StringName()) {
+			p_identifier->set_datatype(make_global_enum_type(enum_name, StringName(), false));
+		} else {
+			p_identifier->set_datatype(type_from_variant(value, p_identifier));
+		}
+		p_identifier->is_constant = true;
+		p_identifier->reduced_value = value;
+		return true;
+	}
+
+	if (GDScriptLanguage::get_singleton()->has_any_global_constant(name)) {
+		const Variant constant = GDScriptLanguage::get_singleton()->get_any_global_constant(name);
+		p_identifier->set_datatype(type_from_variant(constant, p_identifier));
+		p_identifier->is_constant = true;
+		p_identifier->reduced_value = constant;
+		return true;
+	}
+
+	if (CoreConstants::is_global_enum(name)) {
+		p_identifier->set_datatype(make_global_enum_type(name, StringName(), true));
+		if (!p_can_be_builtin) {
+			push_error(vformat(R"(Global enum "%s" cannot be used on its own.)", name), p_identifier);
+		}
+		return true;
+	}
+
+	if (Variant::has_utility_function(name) || GDScriptUtilityFunctions::function_exists(name)) {
+		p_identifier->is_constant = true;
+		p_identifier->reduced_value = Callable(memnew(GDScriptUtilityCallable(name)));
+		MethodInfo method_info;
+		if (GDScriptUtilityFunctions::function_exists(name)) {
+			method_info = GDScriptUtilityFunctions::get_function_info(name);
+		} else {
+			method_info = Variant::get_utility_function_info(name);
+		}
+		p_identifier->set_datatype(make_callable_type(method_info));
+		return true;
+	}
+
+	// Allow "Variant" here since it might be used for nested enums.
+	if (p_can_be_builtin && name == SNAME("Variant")) {
+		GDScriptParser::DataType variant;
+		variant.kind = GDScriptParser::DataType::VARIANT;
+		variant.type_source = GDScriptParser::DataType::ANNOTATED_EXPLICIT;
+		variant.is_meta_type = true;
+		variant.is_pseudo_type = true;
+		p_identifier->set_datatype(variant);
+		return true;
+	}
+
+	return false;
+}
+
 void GDScriptAnalyzer::reduce_identifier(GDScriptParser::IdentifierNode *p_identifier, bool can_be_builtin) {
 	// TODO: This is an opportunity to further infer types.
 
@@ -4477,129 +4627,15 @@ void GDScriptAnalyzer::reduce_identifier(GDScriptParser::IdentifierNode *p_ident
 		return;
 	}
 
-	StringName name = p_identifier->name;
 	p_identifier->source = GDScriptParser::IdentifierNode::UNDEFINED_SOURCE;
 
 	// Not a local or a member, so check globals.
-
-	Variant::Type builtin_type = GDScriptParser::get_builtin_type(name);
-	if (builtin_type < Variant::VARIANT_MAX) {
-		if (can_be_builtin) {
-			p_identifier->set_datatype(make_builtin_meta_type(builtin_type));
-			return;
-		} else {
-			push_error(R"(Builtin type cannot be used as a name on its own.)", p_identifier);
-		}
-	}
-
-	if (class_exists(name)) {
-		p_identifier->set_datatype(make_native_meta_type(name));
-		return;
-	}
-
-	if (ScriptServer::is_global_class(name)) {
-		p_identifier->set_datatype(make_global_class_meta_type(name, p_identifier));
-		return;
-	}
-
-	// Try singletons.
-	// Do this before globals because this might be a singleton loading another one before it's compiled.
-	if (ProjectSettings::get_singleton()->has_autoload(name)) {
-		const ProjectSettings::AutoloadInfo &autoload = ProjectSettings::get_singleton()->get_autoload(name);
-		if (autoload.is_singleton) {
-			// Singleton exists, so it's at least a Node.
-			GDScriptParser::DataType result;
-			result.type_source = GDScriptParser::DataType::ANNOTATED_EXPLICIT;
-			result.kind = GDScriptParser::DataType::NATIVE;
-			result.builtin_type = Variant::OBJECT;
-			result.native_type = SNAME("Node");
-			if (ResourceLoader::get_resource_type(autoload.path) == "GDScript") {
-				Ref<GDScriptParserRef> single_parser = parser->get_depended_parser_for(autoload.path);
-				if (single_parser.is_valid()) {
-					Error err = single_parser->raise_status(GDScriptParserRef::INHERITANCE_SOLVED);
-					if (err == OK) {
-						result = type_from_metatype(single_parser->get_parser()->head->get_datatype());
-					}
-				}
-			} else if (ResourceLoader::get_resource_type(autoload.path) == "PackedScene") {
-				if (GDScriptLanguage::get_singleton()->has_any_global_constant(name)) {
-					Variant constant = GDScriptLanguage::get_singleton()->get_any_global_constant(name);
-					Node *node = Object::cast_to<Node>(constant);
-					if (node != nullptr) {
-						Ref<GDScript> scr = node->get_script();
-						if (scr.is_valid()) {
-							Ref<GDScriptParserRef> single_parser = parser->get_depended_parser_for(scr->get_script_path());
-							if (single_parser.is_valid()) {
-								Error err = single_parser->raise_status(GDScriptParserRef::INHERITANCE_SOLVED);
-								if (err == OK) {
-									result = type_from_metatype(single_parser->get_parser()->head->get_datatype());
-								}
-							}
-						}
-					}
-				}
-			}
-			result.is_constant = true;
-			p_identifier->set_datatype(result);
-			return;
-		}
-	}
-
-	if (CoreConstants::is_global_constant(name)) {
-		int index = CoreConstants::get_global_constant_index(name);
-		StringName enum_name = CoreConstants::get_global_constant_enum(index);
-		int64_t value = CoreConstants::get_global_constant_value(index);
-		if (enum_name != StringName()) {
-			p_identifier->set_datatype(make_global_enum_type(enum_name, StringName(), false));
-		} else {
-			p_identifier->set_datatype(type_from_variant(value, p_identifier));
-		}
-		p_identifier->is_constant = true;
-		p_identifier->reduced_value = value;
-		return;
-	}
-
-	if (GDScriptLanguage::get_singleton()->has_any_global_constant(name)) {
-		Variant constant = GDScriptLanguage::get_singleton()->get_any_global_constant(name);
-		p_identifier->set_datatype(type_from_variant(constant, p_identifier));
-		p_identifier->is_constant = true;
-		p_identifier->reduced_value = constant;
-		return;
-	}
-
-	if (CoreConstants::is_global_enum(name)) {
-		p_identifier->set_datatype(make_global_enum_type(name, StringName(), true));
-		if (!can_be_builtin) {
-			push_error(vformat(R"(Global enum "%s" cannot be used on its own.)", name), p_identifier);
-		}
-		return;
-	}
-
-	if (Variant::has_utility_function(name) || GDScriptUtilityFunctions::function_exists(name)) {
-		p_identifier->is_constant = true;
-		p_identifier->reduced_value = Callable(memnew(GDScriptUtilityCallable(name)));
-		MethodInfo method_info;
-		if (GDScriptUtilityFunctions::function_exists(name)) {
-			method_info = GDScriptUtilityFunctions::get_function_info(name);
-		} else {
-			method_info = Variant::get_utility_function_info(name);
-		}
-		p_identifier->set_datatype(make_callable_type(method_info));
-		return;
-	}
-
-	// Allow "Variant" here since it might be used for nested enums.
-	if (can_be_builtin && name == SNAME("Variant")) {
-		GDScriptParser::DataType variant;
-		variant.kind = GDScriptParser::DataType::VARIANT;
-		variant.type_source = GDScriptParser::DataType::ANNOTATED_EXPLICIT;
-		variant.is_meta_type = true;
-		variant.is_pseudo_type = true;
-		p_identifier->set_datatype(variant);
+	if (reduce_global_identifier(p_identifier, can_be_builtin)) {
 		return;
 	}
 
 	// Not found.
+	const StringName name = p_identifier->name;
 #ifdef SUGGEST_GODOT4_RENAMES
 	String rename_hint;
 	if (GLOBAL_GET("debug/gdscript/warnings/renamed_in_godot_4_hint")) {
@@ -4736,6 +4772,11 @@ void GDScriptAnalyzer::reduce_subscript(GDScriptParser::SubscriptNode *p_subscri
 
 		GDScriptParser::DataType base_type = p_subscript->base->get_datatype();
 		bool valid = false;
+		const bool is_global_scope_base = base_type.is_variant() &&
+				base_type.is_meta_type &&
+				base_type.is_pseudo_type &&
+				p_subscript->base->type == GDScriptParser::Node::IDENTIFIER &&
+				static_cast<GDScriptParser::IdentifierNode *>(p_subscript->base)->name == SNAME("GlobalScope");
 
 		// If the base is a metatype, use the analyzer instead.
 		if (p_subscript->base->is_constant && !base_type.is_meta_type) {
@@ -4775,6 +4816,14 @@ void GDScriptAnalyzer::reduce_subscript(GDScriptParser::SubscriptNode *p_subscri
 
 		if (valid) {
 			// Do nothing.
+		} else if (is_global_scope_base) {
+			if (reduce_global_identifier(p_subscript->attribute, true)) {
+				const GDScriptParser::DataType attr_type = p_subscript->attribute->get_datatype();
+				valid = !attr_type.is_pseudo_type || p_can_be_pseudo_type;
+				result_type = attr_type;
+				p_subscript->is_constant = p_subscript->attribute->is_constant;
+				p_subscript->reduced_value = p_subscript->attribute->reduced_value;
+			}
 		} else if (base_type.is_variant() || !base_type.is_hard_type()) {
 			valid = !base_type.is_pseudo_type || p_can_be_pseudo_type;
 			result_type.kind = GDScriptParser::DataType::VARIANT;
@@ -4830,6 +4879,8 @@ void GDScriptAnalyzer::reduce_subscript(GDScriptParser::SubscriptNode *p_subscri
 			GDScriptParser::DataType attr_type = p_subscript->attribute->get_datatype();
 			if (!p_can_be_pseudo_type && (attr_type.is_pseudo_type || result_type.is_pseudo_type)) {
 				push_error(vformat(R"(Type "%s" in base "%s" cannot be used on its own.)", p_subscript->attribute->name, type_from_metatype(base_type).to_string()), p_subscript->attribute);
+			} else if (is_global_scope_base) {
+				push_error(vformat(R"(Cannot find global identifier "%s".)", p_subscript->attribute->name), p_subscript->attribute);
 			} else {
 				push_error(vformat(R"(Cannot find member "%s" in base "%s".)", p_subscript->attribute->name, type_from_metatype(base_type).to_string()), p_subscript->attribute);
 			}
