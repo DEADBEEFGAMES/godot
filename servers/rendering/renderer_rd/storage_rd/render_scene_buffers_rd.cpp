@@ -183,6 +183,10 @@ void RenderSceneBuffersRD::configure(const RenderSceneBuffersConfiguration *p_co
 	// Create our depth buffer.
 	create_texture(RB_SCOPE_BUFFERS, RB_TEX_DEPTH, get_depth_format(resolve_target, false, can_be_storage), get_depth_usage_bits(resolve_target, false, can_be_storage));
 
+	// Keep velocity lifetime aligned with color/depth so resize reconfiguration
+	// does not leave scripts observing a transient missing velocity texture.
+	ensure_velocity();
+
 	// Create our MSAA buffers.
 	if (msaa_3d == RS::VIEWPORT_MSAA_DISABLED) {
 		texture_samples = RD::TEXTURE_SAMPLES_1;
@@ -636,6 +640,29 @@ RID RenderSceneBuffersRD::get_normal_texture() const {
 	return RID();
 }
 
+RID RenderSceneBuffersRD::get_velocity_texture() const {
+	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
+	RID velocity = texture_storage->render_target_get_override_velocity(render_target);
+	if (velocity.is_valid()) {
+		return velocity;
+	}
+	if (has_texture(RB_SCOPE_BUFFERS, RB_TEX_VELOCITY)) {
+		return get_texture(RB_SCOPE_BUFFERS, RB_TEX_VELOCITY);
+	}
+
+	// Lazy safety net: if resize/reconfigure just happened and velocity was not
+	// prepared yet, create it on demand to match depth/normal availability.
+	if (render_target.is_valid() && internal_size.x > 0 && internal_size.y > 0) {
+		RenderSceneBuffersRD *mutable_self = const_cast<RenderSceneBuffersRD *>(this);
+		mutable_self->ensure_velocity();
+		if (mutable_self->has_texture(RB_SCOPE_BUFFERS, RB_TEX_VELOCITY)) {
+			return mutable_self->get_texture(RB_SCOPE_BUFFERS, RB_TEX_VELOCITY);
+		}
+	}
+
+	return RID();
+}
+
 RID RenderSceneBuffersRD::get_depth_texture(const uint32_t p_layer) {
 	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
 	RID depth_slice = texture_storage->render_target_get_override_depth_slice(render_target, p_layer);
@@ -715,6 +742,16 @@ RID RenderSceneBuffersRD::get_velocity_buffer(bool p_get_msaa, uint32_t p_layer)
 			return get_texture_slice(RB_SCOPE_BUFFERS, RB_TEX_VELOCITY, p_layer, 0);
 		}
 	}
+}
+
+void RenderSceneBuffersRD::discard_motion_vector_writes_once() {
+	discard_motion_vector_writes_next_frame = true;
+}
+
+bool RenderSceneBuffersRD::consume_discard_motion_vector_writes_once() {
+	const bool discard = discard_motion_vector_writes_next_frame;
+	discard_motion_vector_writes_next_frame = false;
+	return discard;
 }
 
 uint32_t RenderSceneBuffersRD::get_color_usage_bits(bool p_resolve, bool p_msaa, bool p_storage) {

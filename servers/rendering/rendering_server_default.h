@@ -705,6 +705,7 @@ public:
 	FUNC1RC(RID, viewport_get_texture, RID)
 	FUNC1RC(RID, viewport_get_depth_texture, RID)
 	FUNC1RC(RID, viewport_get_normal_texture, RID)
+	FUNC1RC(RID, viewport_get_velocity_texture, RID)
 
 	FUNC2(viewport_set_disable_2d, RID, bool)
 	FUNC2(viewport_set_environment_mode, RID, ViewportEnvironmentMode)
@@ -738,6 +739,7 @@ public:
 	FUNC2(viewport_set_use_taa, RID, bool)
 	FUNC2(viewport_set_use_debanding, RID, bool)
 	FUNC2(viewport_set_force_motion_vectors, RID, bool)
+	FUNC1(viewport_discard_motion_vector_writes_once, RID)
 	FUNC2(viewport_set_use_occlusion_culling, RID, bool)
 	FUNC1(viewport_set_occlusion_rays_per_thread, int)
 	FUNC1(viewport_set_occlusion_culling_build_quality, ViewportOcclusionCullingBuildQuality)

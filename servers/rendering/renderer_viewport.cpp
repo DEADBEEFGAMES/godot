@@ -313,6 +313,10 @@ void RendererViewport::_draw_3d(Viewport *p_viewport) {
 	}
 
 	float screen_mesh_lod_threshold = p_viewport->mesh_lod_threshold / float(p_viewport->size.width);
+	if (p_viewport->discard_motion_vector_writes_once && p_viewport->render_buffers.is_valid()) {
+		p_viewport->render_buffers->discard_motion_vector_writes_once();
+		p_viewport->discard_motion_vector_writes_once = false;
+	}
 	RSG::scene->render_camera(p_viewport->render_buffers, p_viewport->camera, p_viewport->scenario, p_viewport->self, p_viewport->internal_size, p_viewport->jitter_phase_count, screen_mesh_lod_threshold, p_viewport->shadow_atlas, xr_interface, &p_viewport->render_info);
 
 	RENDER_TIMESTAMP("< Render 3D Scene");
@@ -1241,6 +1245,16 @@ RID RendererViewport::viewport_get_normal_texture(RID p_viewport) const {
 	return RID();
 }
 
+RID RendererViewport::viewport_get_velocity_texture(RID p_viewport) const {
+	const Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	ERR_FAIL_NULL_V(viewport, RID());
+
+	if (viewport->render_buffers.is_valid()) {
+		return viewport->render_buffers->get_velocity_texture();
+	}
+	return RID();
+}
+
 RID RendererViewport::viewport_get_occluder_debug_texture(RID p_viewport) const {
 	const Viewport *viewport = viewport_owner.get_or_null(p_viewport);
 	ERR_FAIL_NULL_V(viewport, RID());
@@ -1496,6 +1510,12 @@ void RendererViewport::viewport_set_force_motion_vectors(RID p_viewport, bool p_
 	}
 
 	_configure_3d_render_buffers(viewport);
+}
+
+void RendererViewport::viewport_discard_motion_vector_writes_once(RID p_viewport) {
+	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	ERR_FAIL_NULL(viewport);
+	viewport->discard_motion_vector_writes_once = true;
 }
 
 void RendererViewport::viewport_set_use_occlusion_culling(RID p_viewport, bool p_use_occlusion_culling) {

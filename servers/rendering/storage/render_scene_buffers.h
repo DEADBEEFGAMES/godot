@@ -119,6 +119,12 @@ public:
 	// Access to viewport pass textures (when 3D is rendered). Return RID() when not available.
 	virtual RID get_depth_texture() const { return RID(); }
 	virtual RID get_normal_texture() const { return RID(); }
+	virtual RID get_velocity_texture() const { return RID(); }
+
+	// One-shot control for temporal pipelines: discard velocity writes this frame
+	// and keep previous velocity buffer content.
+	virtual void discard_motion_vector_writes_once() {}
+	virtual bool consume_discard_motion_vector_writes_once() { return false; }
 };
 
 class RenderSceneBuffersExtension : public RenderSceneBuffers {

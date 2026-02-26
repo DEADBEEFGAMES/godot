@@ -327,6 +327,7 @@ private:
 
 	mutable Ref<Texture2DRD> depth_texture_cache;
 	mutable Ref<Texture2DRD> normal_texture_cache;
+	mutable Ref<Texture2DRD> velocity_texture_cache;
 
 	void _update_viewport_path();
 
@@ -553,6 +554,8 @@ public:
 	Ref<Texture2D> get_depth_texture() const;
 	/** Returns the viewport's normal/roughness buffer as a Texture2D usable in materials (forward clustered renderer only). */
 	Ref<Texture2D> get_normal_texture() const;
+	/** Returns the viewport's velocity buffer as a Texture2D usable in materials when motion vectors are available. */
+	Ref<Texture2D> get_velocity_texture() const;
 
 	void set_positional_shadow_atlas_size(int p_size);
 	int get_positional_shadow_atlas_size() const;

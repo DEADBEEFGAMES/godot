@@ -1243,6 +1243,17 @@ void fragment_shader(in SceneData scene_data) {
 
 	mat4 read_view_matrix = scene_data.view_matrix;
 	vec2 read_viewport_size = scene_data.viewport_size;
+#if defined(VELOCITY_USED)
+	vec2 custom_velocity = vec2(0.0);
+#if defined(MOTION_VECTORS) && !defined(MODE_RENDER_DEPTH)
+	// Default to engine reprojection velocity so shaders can override VELOCITY partially.
+	vec2 position_clip = (screen_position.xy / screen_position.w) - scene_data.taa_jitter;
+	vec2 prev_position_clip = (prev_screen_position.xy / prev_screen_position.w) - scene_data_block.prev_data.taa_jitter;
+	vec2 position_uv = position_clip * vec2(0.5, 0.5);
+	vec2 prev_position_uv = prev_position_clip * vec2(0.5, 0.5);
+	custom_velocity = prev_position_uv - position_uv;
+#endif
+#endif
 	{
 #CODE : FRAGMENT
 	}
@@ -2787,6 +2798,9 @@ void fragment_shader(in SceneData scene_data) {
 
 #endif //MODE_RENDER_DEPTH
 #ifdef MOTION_VECTORS
+#if defined(VELOCITY_USED)
+	motion_vector = custom_velocity;
+#else
 	vec2 position_clip = (screen_position.xy / screen_position.w) - scene_data.taa_jitter;
 	vec2 prev_position_clip = (prev_screen_position.xy / prev_screen_position.w) - scene_data_block.prev_data.taa_jitter;
 
@@ -2794,6 +2808,7 @@ void fragment_shader(in SceneData scene_data) {
 	vec2 prev_position_uv = prev_position_clip * vec2(0.5, 0.5);
 
 	motion_vector = prev_position_uv - position_uv;
+#endif
 #endif
 
 #if defined(PREMUL_ALPHA_USED) && !defined(MODE_RENDER_DEPTH)

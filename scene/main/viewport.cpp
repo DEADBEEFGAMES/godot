@@ -1344,6 +1344,23 @@ Ref<Texture2D> Viewport::get_normal_texture() const {
 	return normal_texture_cache;
 }
 
+Ref<Texture2D> Viewport::get_velocity_texture() const {
+	ERR_READ_THREAD_GUARD_V(Ref<Texture2D>());
+	RID vp_rid = get_viewport_rid();
+	if (vp_rid.is_null()) {
+		return Ref<Texture2D>();
+	}
+	RID velocity_rid = RS::get_singleton()->viewport_get_velocity_texture(vp_rid);
+	if (velocity_rid.is_null()) {
+		return Ref<Texture2D>();
+	}
+	if (!velocity_texture_cache.is_valid()) {
+		velocity_texture_cache.instantiate();
+	}
+	velocity_texture_cache->set_texture_rd_rid(velocity_rid);
+	return velocity_texture_cache;
+}
+
 void Viewport::set_positional_shadow_atlas_size(int p_size) {
 	ERR_MAIN_THREAD_GUARD;
 	positional_shadow_atlas_size = p_size;
@@ -4861,6 +4878,7 @@ void Viewport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_texture"), &Viewport::get_texture);
 	ClassDB::bind_method(D_METHOD("get_depth_texture"), &Viewport::get_depth_texture);
 	ClassDB::bind_method(D_METHOD("get_normal_texture"), &Viewport::get_normal_texture);
+	ClassDB::bind_method(D_METHOD("get_velocity_texture"), &Viewport::get_velocity_texture);
 
 	ClassDB::bind_method(D_METHOD("set_physics_object_picking", "enable"), &Viewport::set_physics_object_picking);
 	ClassDB::bind_method(D_METHOD("get_physics_object_picking"), &Viewport::get_physics_object_picking);

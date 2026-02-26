@@ -997,6 +997,7 @@ public:
 	virtual RID viewport_get_texture(RID p_viewport) const = 0;
 	virtual RID viewport_get_depth_texture(RID p_viewport) const = 0;
 	virtual RID viewport_get_normal_texture(RID p_viewport) const = 0;
+	virtual RID viewport_get_velocity_texture(RID p_viewport) const = 0;
 
 	enum ViewportEnvironmentMode {
 		VIEWPORT_ENVIRONMENT_DISABLED,
@@ -1070,6 +1071,7 @@ public:
 	virtual void viewport_set_use_debanding(RID p_viewport, bool p_use_debanding) = 0;
 
 	virtual void viewport_set_force_motion_vectors(RID p_viewport, bool p_force_motion_vectors) = 0;
+	virtual void viewport_discard_motion_vector_writes_once(RID p_viewport) = 0;
 
 	virtual void viewport_set_mesh_lod_threshold(RID p_viewport, float p_pixels) = 0;
 

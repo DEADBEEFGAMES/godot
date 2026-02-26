@@ -219,6 +219,7 @@ public:
 
 		bool uses_point_size = false;
 		bool uses_alpha = false;
+		bool uses_velocity = false;
 		bool uses_blend_alpha = false;
 		bool uses_alpha_clip = false;
 		bool uses_alpha_antialiasing = false;

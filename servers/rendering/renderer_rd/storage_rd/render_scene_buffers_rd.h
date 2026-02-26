@@ -93,6 +93,7 @@ private:
 	RS::ViewportScreenSpaceAA screen_space_aa = RS::VIEWPORT_SCREEN_SPACE_AA_DISABLED;
 	bool use_taa = false;
 	bool use_debanding = false;
+	bool discard_motion_vector_writes_next_frame = false;
 	RD::TextureSamples texture_samples = RD::TEXTURE_SAMPLES_1;
 
 	// Named Textures
@@ -273,6 +274,7 @@ public:
 	RID get_depth_texture() const override;
 	RID get_depth_texture(const uint32_t p_layer);
 	RID get_normal_texture() const override;
+	RID get_velocity_texture() const override;
 
 	RID get_depth_msaa() const {
 		return get_texture(RB_SCOPE_BUFFERS, RB_TEX_DEPTH_MSAA);
@@ -312,6 +314,8 @@ public:
 	bool has_velocity_buffer(bool p_has_msaa);
 	RID get_velocity_buffer(bool p_get_msaa);
 	RID get_velocity_buffer(bool p_get_msaa, uint32_t p_layer);
+	virtual void discard_motion_vector_writes_once() override;
+	virtual bool consume_discard_motion_vector_writes_once() override;
 
 	// Samplers adjusted with the mipmap bias that is best fit for the configuration of these render buffers.
 

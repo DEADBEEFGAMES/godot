@@ -1776,12 +1776,18 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 	}
 
 	bool using_upscaling = scale_type != SCALE_NONE;
+	bool force_motion_vectors = RSG::viewport->get_num_viewports_with_motion_vectors() > 0;
+	bool discard_motion_vector_writes = rb.is_valid() && rb->consume_discard_motion_vector_writes_once();
 
 	// check if we need motion vectors
 	bool motion_vectors_required;
-	if (using_debug_mvs) {
+	if (discard_motion_vector_writes) {
+		motion_vectors_required = false;
+	} else if (using_debug_mvs) {
 		motion_vectors_required = true;
 	} else if (ce_needs_motion_vectors) {
+		motion_vectors_required = true;
+	} else if (force_motion_vectors) {
 		motion_vectors_required = true;
 	} else if (!is_reflection_probe && using_taa) {
 		motion_vectors_required = true;
@@ -1812,6 +1818,11 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 	bool reverse_cull = p_render_data->scene_data->cam_transform.basis.determinant() < 0;
 	bool using_ssil = !is_reflection_probe && p_render_data->environment.is_valid() && environment_get_ssil_enabled(p_render_data->environment);
 	bool using_motion_pass = rb_data.is_valid() && using_upscaling;
+	if (discard_motion_vector_writes) {
+		// One-frame hold: skip dedicated motion pass/clears entirely so the velocity
+		// texture keeps its previous contents for temporal consumers.
+		using_motion_pass = false;
+	}
 
 	if (is_reflection_probe) {
 		uint32_t resolution = light_storage->reflection_probe_instance_get_resolution(p_render_data->reflection_probe);
@@ -2435,8 +2446,11 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 
 	{
 		uint32_t transparent_color_pass_flags = (color_pass_flags | uint32_t(COLOR_PASS_FLAG_TRANSPARENT)) & ~uint32_t(COLOR_PASS_FLAG_SEPARATE_SPECULAR);
-		if (using_motion_pass) {
-			// Motion vectors on transparent draw calls are not required when using the reactive mask.
+		if (using_motion_pass || force_motion_vectors) {
+			// Keep portal-style custom velocity writes stable: when motion vectors are explicitly
+			// forced for viewport-driven effects, skip transparent pass velocity writes so they
+			// do not clobber earlier opaque/custom-depth portal VELOCITY output.
+			// Motion-pass upscaling already disables this via reactive mask path.
 			transparent_color_pass_flags &= ~uint32_t(COLOR_PASS_FLAG_MOTION_VECTORS);
 		}
 
@@ -2452,7 +2466,7 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 	RD::get_singleton()->draw_command_begin_label("Resolve");
 
 	if (rb_data.is_valid() && use_msaa) {
-		bool resolve_velocity_buffer = (using_taa || using_upscaling || ce_needs_motion_vectors) && rb->has_velocity_buffer(true);
+		bool resolve_velocity_buffer = !discard_motion_vector_writes && (using_taa || using_upscaling || ce_needs_motion_vectors) && rb->has_velocity_buffer(true);
 		for (uint32_t v = 0; v < rb->get_view_count(); v++) {
 			RD::get_singleton()->texture_resolve_multisample(rb->get_color_msaa(v), rb->get_internal_texture(v));
 			resolve_effects->resolve_depth(rb->get_depth_msaa(v), rb->get_depth_texture(v), rb->get_internal_size(), texture_multisamples[msaa]);
@@ -4094,7 +4108,7 @@ void RenderForwardClustered::_geometry_instance_add_surface_with_material(Geomet
 		flags |= GeometryInstanceSurfaceDataCache::FLAG_USES_PARTICLE_TRAILS;
 	}
 
-	if (p_material->shader_data->is_animated()) {
+	if (p_material->shader_data->is_animated() || p_material->shader_data->uses_velocity) {
 		flags |= GeometryInstanceSurfaceDataCache::FLAG_USES_MOTION_VECTOR;
 	}
 

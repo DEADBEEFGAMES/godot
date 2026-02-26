@@ -79,6 +79,7 @@ public:
 		bool use_taa = false;
 		bool use_debanding = false;
 		bool force_motion_vectors = false;
+		bool discard_motion_vector_writes_once = false;
 
 		RendererSceneRender::CameraData prev_camera_data;
 		uint64_t prev_camera_data_frame = 0;
@@ -249,6 +250,7 @@ public:
 	RID viewport_get_texture(RID p_viewport) const;
 	RID viewport_get_depth_texture(RID p_viewport) const;
 	RID viewport_get_normal_texture(RID p_viewport) const;
+	RID viewport_get_velocity_texture(RID p_viewport) const;
 	RID viewport_get_occluder_debug_texture(RID p_viewport) const;
 
 	void viewport_set_prev_camera_data(RID p_viewport, const RendererSceneRender::CameraData *p_camera_data);
@@ -284,6 +286,7 @@ public:
 	void viewport_set_use_taa(RID p_viewport, bool p_use_taa);
 	void viewport_set_use_debanding(RID p_viewport, bool p_use_debanding);
 	void viewport_set_force_motion_vectors(RID p_viewport, bool p_force_motion_vectors);
+	void viewport_discard_motion_vector_writes_once(RID p_viewport);
 	void viewport_set_use_occlusion_culling(RID p_viewport, bool p_use_occlusion_culling);
 	void viewport_set_occlusion_rays_per_thread(int p_rays_per_thread);
 	void viewport_set_occlusion_culling_build_quality(RS::ViewportOcclusionCullingBuildQuality p_quality);
