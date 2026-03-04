@@ -47,6 +47,8 @@
 	</dict>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<!-- <key>LSSupportsGameMode</key>
+	<true/> -->
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
