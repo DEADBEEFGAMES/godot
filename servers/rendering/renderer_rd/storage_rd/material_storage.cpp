@@ -854,6 +854,7 @@ MaterialStorage::MaterialData::~MaterialData() {
 void MaterialStorage::MaterialData::update_textures(const HashMap<StringName, Variant> &p_parameters, const HashMap<StringName, HashMap<int, RID>> &p_default_textures, const Vector<ShaderCompiler::GeneratedCode::Texture> &p_texture_uniforms, RID *p_textures, bool p_use_linear_color, bool p_3d_material) {
 	TextureStorage *texture_storage = TextureStorage::get_singleton();
 	MaterialStorage *material_storage = MaterialStorage::get_singleton();
+	RD *rd = RD::get_singleton();
 
 #ifdef TOOLS_ENABLED
 	TextureStorage::Texture *roughness_detect_texture = nullptr;
@@ -863,6 +864,37 @@ void MaterialStorage::MaterialData::update_textures(const HashMap<StringName, Va
 
 	bool uses_global_textures = false;
 	global_textures_pass++;
+
+	auto get_default_rd_texture = [texture_storage](const ShaderCompiler::GeneratedCode::Texture &p_texture_uniform) {
+		switch (p_texture_uniform.type) {
+			case ShaderLanguage::TYPE_ISAMPLER2D:
+			case ShaderLanguage::TYPE_USAMPLER2D:
+			case ShaderLanguage::TYPE_SAMPLER2D: {
+				switch (p_texture_uniform.hint) {
+					case ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_BLACK: return texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_BLACK);
+					case ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_TRANSPARENT: return texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_TRANSPARENT);
+					case ShaderLanguage::ShaderNode::Uniform::HINT_ANISOTROPY: return texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_ANISO);
+					case ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL:
+					case ShaderLanguage::ShaderNode::Uniform::HINT_ROUGHNESS_NORMAL: return texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_NORMAL);
+					default: return texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_WHITE);
+				}
+			}
+			case ShaderLanguage::TYPE_SAMPLERCUBE: {
+				switch (p_texture_uniform.hint) {
+					case ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_BLACK: return texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_CUBEMAP_BLACK);
+					default: return texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_CUBEMAP_WHITE);
+				}
+			}
+			case ShaderLanguage::TYPE_SAMPLERCUBEARRAY: return texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_CUBEMAP_ARRAY_BLACK);
+			case ShaderLanguage::TYPE_ISAMPLER3D:
+			case ShaderLanguage::TYPE_USAMPLER3D:
+			case ShaderLanguage::TYPE_SAMPLER3D: return texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_3D_WHITE);
+			case ShaderLanguage::TYPE_ISAMPLER2DARRAY:
+			case ShaderLanguage::TYPE_USAMPLER2DARRAY:
+			case ShaderLanguage::TYPE_SAMPLER2DARRAY: return texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_2D_ARRAY_WHITE);
+			default: return texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_WHITE);
+		}
+	};
 
 	for (int i = 0, k = 0; i < p_texture_uniforms.size(); i++) {
 		const StringName &uniform_name = p_texture_uniforms[i].name;
@@ -941,62 +973,7 @@ void MaterialStorage::MaterialData::update_textures(const HashMap<StringName, Va
 		RID rd_texture;
 
 		if (textures.is_empty()) {
-			//check default usage
-			switch (p_texture_uniforms[i].type) {
-				case ShaderLanguage::TYPE_ISAMPLER2D:
-				case ShaderLanguage::TYPE_USAMPLER2D:
-				case ShaderLanguage::TYPE_SAMPLER2D: {
-					switch (p_texture_uniforms[i].hint) {
-						case ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_BLACK: {
-							rd_texture = texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_BLACK);
-						} break;
-						case ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_TRANSPARENT: {
-							rd_texture = texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_TRANSPARENT);
-						} break;
-						case ShaderLanguage::ShaderNode::Uniform::HINT_ANISOTROPY: {
-							rd_texture = texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_ANISO);
-						} break;
-						case ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL: {
-							rd_texture = texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_NORMAL);
-						} break;
-						case ShaderLanguage::ShaderNode::Uniform::HINT_ROUGHNESS_NORMAL: {
-							rd_texture = texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_NORMAL);
-						} break;
-						default: {
-							rd_texture = texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_WHITE);
-						} break;
-					}
-				} break;
-
-				case ShaderLanguage::TYPE_SAMPLERCUBE: {
-					switch (p_texture_uniforms[i].hint) {
-						case ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_BLACK: {
-							rd_texture = texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_CUBEMAP_BLACK);
-						} break;
-						default: {
-							rd_texture = texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_CUBEMAP_WHITE);
-						} break;
-					}
-				} break;
-				case ShaderLanguage::TYPE_SAMPLERCUBEARRAY: {
-					rd_texture = texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_CUBEMAP_ARRAY_BLACK);
-				} break;
-
-				case ShaderLanguage::TYPE_ISAMPLER3D:
-				case ShaderLanguage::TYPE_USAMPLER3D:
-				case ShaderLanguage::TYPE_SAMPLER3D: {
-					rd_texture = texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_3D_WHITE);
-				} break;
-
-				case ShaderLanguage::TYPE_ISAMPLER2DARRAY:
-				case ShaderLanguage::TYPE_USAMPLER2DARRAY:
-				case ShaderLanguage::TYPE_SAMPLER2DARRAY: {
-					rd_texture = texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_2D_ARRAY_WHITE);
-				} break;
-
-				default: {
-				}
-			}
+			rd_texture = get_default_rd_texture(p_texture_uniforms[i]);
 #ifdef TOOLS_ENABLED
 			if (roughness_detect_texture && normal_detect_texture && !normal_detect_texture->path.is_empty()) {
 				roughness_detect_texture->detect_roughness_callback(roughness_detect_texture->detect_roughness_callback_ud, normal_detect_texture->path, roughness_channel);
@@ -1038,8 +1015,8 @@ void MaterialStorage::MaterialData::update_textures(const HashMap<StringName, Va
 						render_target_cache.push_back(tex->render_target);
 					}
 				}
-				if (rd_texture.is_null()) {
-					rd_texture = texture_storage->texture_rd_get_default(TextureStorage::DEFAULT_RD_TEXTURE_WHITE);
+				if (rd_texture.is_null() || !rd->texture_is_valid(rd_texture)) {
+					rd_texture = get_default_rd_texture(p_texture_uniforms[i]);
 				}
 #ifdef TOOLS_ENABLED
 				if (roughness_detect_texture && normal_detect_texture && !normal_detect_texture->path.is_empty()) {

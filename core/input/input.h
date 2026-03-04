@@ -45,6 +45,7 @@ class Input : public Object {
 	static Input *singleton;
 
 	static constexpr uint64_t MAX_EVENT = 32;
+	static constexpr uint32_t MAX_MOUSE_MOTION_EVENT_BUFFER = 1024;
 
 public:
 	// Keep synced with "DisplayServer::MouseMode" enum.
@@ -257,6 +258,7 @@ private:
 	void _parse_input_event_impl(const Ref<InputEvent> &p_event, bool p_is_emulated);
 
 	List<Ref<InputEvent>> buffered_events;
+	List<Ref<InputEventMouseMotion>> mouse_motion_event_buffer;
 #ifdef DEBUG_ENABLED
 	HashSet<Ref<InputEvent>> frame_parsed_events;
 	uint64_t last_parsed_frame = UINT64_MAX;
@@ -391,6 +393,8 @@ public:
 	bool is_using_accumulated_input();
 
 	void release_pressed_events();
+	uint32_t get_mouse_motion_event_buffer_size() const;
+	TypedArray<InputEventMouseMotion> pop_mouse_motion_event_buffer();
 
 	void set_event_dispatch_function(EventDispatchFunc p_function);
 

@@ -78,6 +78,7 @@ void Texture2DRD::set_texture_rd_rid(RID p_texture_rd_rid) {
 	} else if (texture_rid.is_valid()) {
 		RS::get_singleton()->free(texture_rid);
 		texture_rid = RID();
+		texture_rd_rid = RID();
 		size = Size2i();
 
 		notify_property_list_changed();
@@ -89,6 +90,10 @@ void Texture2DRD::_set_texture_rd_rid(RID p_texture_rd_rid) {
 	ERR_FAIL_NULL(RD::get_singleton());
 	ERR_FAIL_COND(!RD::get_singleton()->texture_is_valid(p_texture_rd_rid));
 
+	if (texture_rd_rid == p_texture_rd_rid && texture_rid.is_valid()) {
+		return;
+	}
+
 	RD::TextureFormat tf = RD::get_singleton()->texture_get_format(p_texture_rd_rid);
 	ERR_FAIL_COND(tf.texture_type != RD::TEXTURE_TYPE_2D);
 	ERR_FAIL_COND(tf.depth > 1);
@@ -97,10 +102,18 @@ void Texture2DRD::_set_texture_rd_rid(RID p_texture_rd_rid) {
 	size.width = tf.width;
 	size.height = tf.height;
 
+	const bool had_texture = texture_rid.is_valid();
+	const bool old_rd_valid = texture_rd_rid.is_valid() && RD::get_singleton()->texture_is_valid(texture_rd_rid);
 	texture_rd_rid = p_texture_rd_rid;
 
-	if (texture_rid.is_valid()) {
-		RS::get_singleton()->texture_replace(texture_rid, RS::get_singleton()->texture_rd_create(p_texture_rd_rid));
+	if (had_texture) {
+		if (old_rd_valid) {
+			RS::get_singleton()->texture_replace(texture_rid, RS::get_singleton()->texture_rd_create(p_texture_rd_rid));
+		} else {
+			// Old source RID was invalidated (e.g. resize/reconfigure), recreate wrapper.
+			RS::get_singleton()->free(texture_rid);
+			texture_rid = RS::get_singleton()->texture_rd_create(p_texture_rd_rid);
+		}
 	} else {
 		texture_rid = RS::get_singleton()->texture_rd_create(p_texture_rd_rid);
 	}

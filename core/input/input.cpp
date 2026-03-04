@@ -166,6 +166,8 @@ void Input::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_use_accumulated_input", "enable"), &Input::set_use_accumulated_input);
 	ClassDB::bind_method(D_METHOD("is_using_accumulated_input"), &Input::is_using_accumulated_input);
 	ClassDB::bind_method(D_METHOD("flush_buffered_events"), &Input::flush_buffered_events);
+	ClassDB::bind_method(D_METHOD("get_mouse_motion_event_buffer_size"), &Input::get_mouse_motion_event_buffer_size);
+	ClassDB::bind_method(D_METHOD("pop_mouse_motion_event_buffer"), &Input::pop_mouse_motion_event_buffer);
 	ClassDB::bind_method(D_METHOD("set_emulate_mouse_from_touch", "enable"), &Input::set_emulate_mouse_from_touch);
 	ClassDB::bind_method(D_METHOD("is_emulating_mouse_from_touch"), &Input::is_emulating_mouse_from_touch);
 	ClassDB::bind_method(D_METHOD("set_emulate_touch_from_mouse", "enable"), &Input::set_emulate_touch_from_mouse);
@@ -1126,6 +1128,14 @@ void Input::parse_input_event(const Ref<InputEvent> &p_event) {
 
 	ERR_FAIL_COND(p_event.is_null());
 
+	Ref<InputEventMouseMotion> mm = p_event;
+	if (mm.is_valid()) {
+		if (mouse_motion_event_buffer.size() >= MAX_MOUSE_MOTION_EVENT_BUFFER) {
+			mouse_motion_event_buffer.pop_front();
+		}
+		mouse_motion_event_buffer.push_back(mm);
+	}
+
 #ifdef DEBUG_ENABLED
 	uint64_t curr_frame = Engine::get_singleton()->get_process_frames();
 	if (curr_frame != last_parsed_frame) {
@@ -1200,6 +1210,23 @@ void Input::set_use_accumulated_input(bool p_enable) {
 
 bool Input::is_using_accumulated_input() {
 	return use_accumulated_input;
+}
+
+uint32_t Input::get_mouse_motion_event_buffer_size() const {
+	_THREAD_SAFE_METHOD_
+	return mouse_motion_event_buffer.size();
+}
+
+TypedArray<InputEventMouseMotion> Input::pop_mouse_motion_event_buffer() {
+	_THREAD_SAFE_METHOD_
+
+	TypedArray<InputEventMouseMotion> events;
+	while (mouse_motion_event_buffer.front()) {
+		List<Ref<InputEventMouseMotion>>::Element *E = mouse_motion_event_buffer.front();
+		events.push_back(E->get());
+		mouse_motion_event_buffer.pop_front();
+	}
+	return events;
 }
 
 void Input::release_pressed_events() {

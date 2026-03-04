@@ -189,6 +189,13 @@
 				Returns mouse buttons as a bitmask. If multiple mouse buttons are pressed at the same time, the bits are added together. Equivalent to [method DisplayServer.mouse_get_button_state].
 			</description>
 		</method>
+		<method name="get_mouse_motion_event_buffer_size" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the number of [InputEventMouseMotion] events currently stored in the internal mouse motion FIFO buffer.
+				The buffer stores up to 1024 events. When full, older events are discarded first.
+			</description>
+		</method>
 		<method name="get_vector" qualifiers="const">
 			<return type="Vector2" />
 			<param index="0" name="negative_x" type="StringName" />
@@ -309,6 +316,13 @@
 				[/csharp]
 				[/codeblocks]
 				[b]Note:[/b] Calling this function has no influence on the operating system. So for example sending an [InputEventMouseMotion] will not move the OS mouse cursor to the specified position (use [method warp_mouse] instead) and sending [kbd]Alt/Cmd + Tab[/kbd] as [InputEventKey] won't toggle between active windows.
+			</description>
+		</method>
+		<method name="pop_mouse_motion_event_buffer">
+			<return type="InputEventMouseMotion[]" />
+			<description>
+				Returns all [InputEventMouseMotion] events currently stored in the internal mouse motion FIFO buffer, ordered from oldest to newest.
+				Calling this method removes the returned events from the buffer.
 			</description>
 		</method>
 		<method name="remove_joy_mapping">

@@ -483,6 +483,22 @@
 
 	DisplayServerMacOS::WindowData &wd = ds->get_window(window_id);
 
+	// Runtime instrumentation: mouse motion callback rate.
+	// static uint64_t stats_event_count = 0;
+	// static uint64_t stats_last_log_usec = 0;
+	// stats_event_count += 1;
+	// const uint64_t now_usec = OS::get_singleton()->get_ticks_usec();
+	// if (stats_last_log_usec == 0) {
+	// 	stats_last_log_usec = now_usec;
+	// } else if (now_usec - stats_last_log_usec >= 1000000) {
+	// 	const double elapsed_s = double(now_usec - stats_last_log_usec) / 1000000.0;
+	// 	const double events_per_s = double(stats_event_count) / elapsed_s;
+	// 	print_line(vformat("macOS mouseMoved callbacks/s=%.1f (coalescing=%s)",
+	// 			events_per_s, [NSEvent isMouseCoalescingEnabled] ? "ON" : "OFF"));
+	// 	stats_event_count = 0;
+	// 	stats_last_log_usec = now_usec;
+	// }
+
 	NSPoint delta = NSMakePoint([event deltaX], [event deltaY]);
 	NSPoint mpos = [event locationInWindow];
 

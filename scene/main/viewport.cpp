@@ -1323,7 +1323,9 @@ Ref<Texture2D> Viewport::get_depth_texture() const {
 	if (!depth_texture_cache.is_valid()) {
 		depth_texture_cache.instantiate();
 	}
-	depth_texture_cache->set_texture_rd_rid(depth_rid);
+	if (depth_texture_cache->get_texture_rd_rid() != depth_rid) {
+		depth_texture_cache->set_texture_rd_rid(depth_rid);
+	}
 	return depth_texture_cache;
 }
 
@@ -1340,7 +1342,9 @@ Ref<Texture2D> Viewport::get_normal_texture() const {
 	if (!normal_texture_cache.is_valid()) {
 		normal_texture_cache.instantiate();
 	}
-	normal_texture_cache->set_texture_rd_rid(normal_rid);
+	if (normal_texture_cache->get_texture_rd_rid() != normal_rid) {
+		normal_texture_cache->set_texture_rd_rid(normal_rid);
+	}
 	return normal_texture_cache;
 }
 
@@ -1357,7 +1361,9 @@ Ref<Texture2D> Viewport::get_velocity_texture() const {
 	if (!velocity_texture_cache.is_valid()) {
 		velocity_texture_cache.instantiate();
 	}
-	velocity_texture_cache->set_texture_rd_rid(velocity_rid);
+	if (velocity_texture_cache->get_texture_rd_rid() != velocity_rid) {
+		velocity_texture_cache->set_texture_rd_rid(velocity_rid);
+	}
 	return velocity_texture_cache;
 }
 

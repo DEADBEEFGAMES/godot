@@ -3664,6 +3664,10 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 
 	Input::get_singleton()->set_event_dispatch_function(_dispatch_input_events);
 
+	// Disable mouse event coalescing so AppKit delivers higher-frequency
+	// mouse-moved / mouse-dragged / tablet callbacks for drawing apps.
+	[NSEvent setMouseCoalescingEnabled:NO];
+
 	r_error = OK;
 
 	memset(cursors, 0, sizeof(cursors));
