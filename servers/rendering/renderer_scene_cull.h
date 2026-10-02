@@ -94,6 +94,9 @@ public:
 
 		Transform3D transform;
 
+		bool clip_plane_enabled = false;
+		Plane clip_plane; // World space; geometry on the negative side is clipped.
+
 		Camera() {
 			visible_layers = 0xFFFFFFFF;
 			fov = 75;
@@ -119,6 +122,7 @@ public:
 	virtual void camera_set_environment(RID p_camera, RID p_env);
 	virtual void camera_set_camera_attributes(RID p_camera, RID p_attributes);
 	virtual void camera_set_compositor(RID p_camera, RID p_compositor);
+	virtual void camera_set_clip_plane(RID p_camera, bool p_enable, const Plane &p_plane);
 	virtual void camera_set_use_vertical_aspect(RID p_camera, bool p_enable);
 	virtual bool is_camera(RID p_camera) const;
 

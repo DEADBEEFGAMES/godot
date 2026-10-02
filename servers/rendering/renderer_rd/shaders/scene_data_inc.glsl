@@ -74,4 +74,7 @@ struct SceneData {
 	bool pancake_shadows;
 	uint camera_visible_layers;
 	float pass_alpha_multiplier;
+
+	// View space (normal.xyz, -d). Geometry with dot(vec4(vertex, 1.0), clip_plane) < 0 is clipped.
+	highp vec4 clip_plane;
 };

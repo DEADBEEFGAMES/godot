@@ -496,6 +496,8 @@ void vertex_shader(vec3 vertex_input,
 	gl_Position = projection_matrix * vec4(vertex_interp, 1.0);
 #endif
 
+	gl_ClipDistance[0] = dot(vec4(vertex_interp, 1.0), scene_data.clip_plane);
+
 #ifdef USE_MULTIVIEW
 	combined_projected = combined_projection * vec4(vertex_interp, 1.0);
 #endif

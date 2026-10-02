@@ -126,6 +126,15 @@
 				Sets the compositor used by this camera. Equivalent to [member Camera3D.compositor].
 			</description>
 		</method>
+		<method name="camera_set_clip_plane">
+			<return type="void" />
+			<param index="0" name="camera" type="RID" />
+			<param index="1" name="enable" type="bool" />
+			<param index="2" name="plane" type="Plane" />
+			<description>
+				Sets a world-space user clip plane for this camera. Geometry on the negative side of [param plane] (opposite its normal) is not rendered. Shadow passes are not affected. Only supported by the Forward+ renderer.
+			</description>
+		</method>
 		<method name="camera_set_cull_mask">
 			<return type="void" />
 			<param index="0" name="camera" type="RID" />

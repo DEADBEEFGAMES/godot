@@ -125,6 +125,16 @@ void RenderSceneDataRD::update_ubo(RID p_uniform_buffer, RS::ViewportDebugDraw p
 	ubo.camera_visible_layers = camera_visible_layers;
 	ubo.pass_alpha_multiplier = p_opaque_render_buffers && p_apply_alpha_multiplier ? 0.0f : 1.0f;
 
+	if (clip_plane_enabled) {
+		Plane view_clip_plane = cam_transform.affine_inverse().xform(clip_plane);
+		ubo.clip_plane[0] = view_clip_plane.normal.x;
+		ubo.clip_plane[1] = view_clip_plane.normal.y;
+		ubo.clip_plane[2] = view_clip_plane.normal.z;
+		ubo.clip_plane[3] = -view_clip_plane.d;
+	} else {
+		ubo.clip_plane[3] = 1.0f;
+	}
+
 	ubo.viewport_size[0] = p_screen_size.x;
 	ubo.viewport_size[1] = p_screen_size.y;
 

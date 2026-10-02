@@ -55,6 +55,10 @@ public:
 	// For billboards to cast correct shadows.
 	Transform3D main_cam_transform;
 
+	// World space; geometry on the negative side is clipped.
+	bool clip_plane_enabled = false;
+	Plane clip_plane;
+
 	// For stereo rendering
 	uint32_t view_count = 1;
 	Vector3 view_eye_offset[RendererSceneRender::MAX_RENDER_VIEWS];
@@ -167,6 +171,8 @@ private:
 		uint32_t pancake_shadows;
 		uint32_t camera_visible_layers;
 		float pass_alpha_multiplier;
+
+		float clip_plane[4]; // View space (normal.xyz, -d); (0, 0, 0, 1) when disabled.
 	};
 
 	struct UBODATA {

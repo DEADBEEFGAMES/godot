@@ -1151,6 +1151,8 @@ void RendererSceneRenderRD::render_scene(const Ref<RenderSceneBuffers> &p_render
 		scene_data.taa_frame_count = p_camera_data->taa_frame_count;
 		scene_data.main_cam_transform = p_camera_data->main_transform;
 		scene_data.flip_y = !p_reflection_probe.is_valid();
+		scene_data.clip_plane_enabled = p_camera_data->clip_plane_enabled;
+		scene_data.clip_plane = p_camera_data->clip_plane;
 
 		scene_data.view_count = p_camera_data->view_count;
 		for (uint32_t v = 0; v < p_camera_data->view_count; v++) {

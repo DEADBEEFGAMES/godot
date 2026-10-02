@@ -138,6 +138,13 @@ void RendererSceneCull::camera_set_compositor(RID p_camera, RID p_compositor) {
 	camera->compositor = p_compositor;
 }
 
+void RendererSceneCull::camera_set_clip_plane(RID p_camera, bool p_enable, const Plane &p_plane) {
+	Camera *camera = camera_owner.get_or_null(p_camera);
+	ERR_FAIL_NULL(camera);
+	camera->clip_plane_enabled = p_enable;
+	camera->clip_plane = p_plane;
+}
+
 void RendererSceneCull::camera_set_use_vertical_aspect(RID p_camera, bool p_enable) {
 	Camera *camera = camera_owner.get_or_null(p_camera);
 	ERR_FAIL_NULL(camera);
@@ -2764,6 +2771,9 @@ void RendererSceneCull::render_camera(const Ref<RenderSceneBuffers> &p_render_bu
 			// this won't be called (see fail check above) but keeping this comment to indicate we may support more then 2 views in the future...
 		}
 	}
+
+	camera_data.clip_plane_enabled = camera->clip_plane_enabled;
+	camera_data.clip_plane = camera->clip_plane;
 
 	RID environment = _render_get_environment(p_camera, p_scenario);
 	RID compositor = _render_get_compositor(p_camera, p_scenario);
