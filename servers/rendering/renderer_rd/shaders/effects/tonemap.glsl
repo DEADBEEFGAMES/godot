@@ -77,6 +77,7 @@ layout(set = 3, binding = 0) uniform sampler3D source_color_correction;
 #define FLAG_USE_FXAA (1 << 4)
 #define FLAG_USE_DEBANDING (1 << 5)
 #define FLAG_CONVERT_TO_SRGB (1 << 6)
+#define FLAG_USE_TINT (1 << 7)
 
 layout(push_constant, std430) uniform Params {
 	vec3 bcs;
@@ -97,6 +98,8 @@ layout(push_constant, std430) uniform Params {
 	float white;
 	float auto_exposure_scale;
 	float luminance_multiplier;
+
+	vec4 tint; // RGB is the tint color, A is the mix factor.
 }
 params;
 
@@ -591,6 +594,10 @@ void main() {
 
 	if (bool(params.flags & FLAG_USE_COLOR_CORRECTION)) {
 		color.rgb = apply_color_correction(color.rgb);
+	}
+
+	if (bool(params.flags & FLAG_USE_TINT)) {
+		color.rgb = mix(color.rgb, params.tint.rgb, params.tint.a);
 	}
 
 	if (bool(params.flags & FLAG_USE_DEBANDING)) {

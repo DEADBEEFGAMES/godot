@@ -829,3 +829,23 @@ RID RendererEnvironmentStorage::environment_get_color_correction(RID p_env) cons
 	ERR_FAIL_NULL_V(env, RID());
 	return env->color_correction;
 }
+
+void RendererEnvironmentStorage::environment_set_adjustment_tint(RID p_env, const Color &p_color, float p_factor) {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL(env);
+
+	env->adjustments_tint_color = p_color;
+	env->adjustments_tint_factor = p_factor;
+}
+
+Color RendererEnvironmentStorage::environment_get_adjustments_tint_color(RID p_env) const {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL_V(env, Color(1.0, 1.0, 1.0));
+	return env->adjustments_tint_color;
+}
+
+float RendererEnvironmentStorage::environment_get_adjustments_tint_factor(RID p_env) const {
+	Environment *env = environment_owner.get_or_null(p_env);
+	ERR_FAIL_NULL_V(env, 0.0);
+	return env->adjustments_tint_factor;
+}

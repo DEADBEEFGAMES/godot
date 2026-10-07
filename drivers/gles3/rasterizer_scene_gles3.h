@@ -450,6 +450,8 @@ private:
 			float brightness = 1.0;
 			float contrast = 1.0;
 			float saturation = 1.0;
+
+			float tint[4] = { 1.0, 1.0, 1.0, 0.0 };
 		};
 		static_assert(sizeof(TonemapUBO) % 16 == 0, "Tonemap UBO size must be a multiple of 16 bytes");
 

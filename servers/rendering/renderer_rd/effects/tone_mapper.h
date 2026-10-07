@@ -66,6 +66,7 @@ private:
 		TONEMAP_FLAG_USE_FXAA = (1 << 4),
 		TONEMAP_FLAG_USE_DEBANDING = (1 << 5),
 		TONEMAP_FLAG_CONVERT_TO_SRGB = (1 << 6),
+		TONEMAP_FLAG_USE_TINT = (1 << 7),
 	};
 
 	struct TonemapPushConstant {
@@ -87,6 +88,8 @@ private:
 		float white; //  4 - 88
 		float auto_exposure_scale; //  4 - 92
 		float luminance_multiplier; //  4 - 96
+
+		float tint[4]; // 16 - 112
 	};
 
 	/* tonemap actually writes to a framebuffer, which is
@@ -141,6 +144,10 @@ public:
 		bool use_1d_color_correction = false;
 		RID color_correction_texture;
 
+		bool use_tint = false;
+		Color tint_color = Color(1.0, 1.0, 1.0);
+		float tint_factor = 0.0;
+
 		bool use_fxaa = false;
 		bool use_debanding = false;
 		Vector2i texture_size;
@@ -151,6 +158,9 @@ public:
 
 	void tonemapper(RID p_source_color, RID p_dst_framebuffer, const TonemapSettings &p_settings);
 	void tonemapper(RD::DrawListID p_subpass_draw_list, RID p_source_color, RD::FramebufferFormatID p_dst_format_id, const TonemapSettings &p_settings);
+
+private:
+	void _set_tint(const TonemapSettings &p_settings);
 };
 
 } // namespace RendererRD

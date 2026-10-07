@@ -221,6 +221,9 @@ private:
 	bool use_1d_color_correction = true;
 	Ref<Texture> adjustment_color_correction;
 	void _update_adjustment();
+	Color adjustment_tint_color = Color(1.0, 1.0, 1.0);
+	float adjustment_tint_factor = 0.0;
+	void _update_adjustment_tint();
 
 protected:
 	static void _bind_methods();
@@ -442,6 +445,10 @@ public:
 	float get_adjustment_saturation() const;
 	void set_adjustment_color_correction(Ref<Texture> p_color_correction);
 	Ref<Texture> get_adjustment_color_correction() const;
+	void set_adjustment_tint_color(const Color &p_color);
+	Color get_adjustment_tint_color() const;
+	void set_adjustment_tint_factor(float p_factor);
+	float get_adjustment_tint_factor() const;
 
 	Environment();
 	~Environment();

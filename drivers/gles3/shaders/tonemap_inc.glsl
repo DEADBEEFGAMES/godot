@@ -8,6 +8,8 @@ layout(std140) uniform TonemapData { //ubo:0
 	float brightness;
 	float contrast;
 	float saturation;
+
+	vec4 adjustment_tint; // RGB is the tint color, A is the mix factor.
 };
 
 // This expects 0-1 range input.

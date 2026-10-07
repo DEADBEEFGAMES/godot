@@ -648,6 +648,9 @@ void RendererSceneRenderRD::_render_buffers_post_process_and_tonemap(const Rende
 				tonemap.use_1d_color_correction = environment_get_use_1d_color_correction(p_render_data->environment);
 				tonemap.color_correction_texture = texture_storage->texture_get_rd_texture(environment_get_color_correction(p_render_data->environment));
 			}
+			tonemap.tint_color = environment_get_adjustments_tint_color(p_render_data->environment);
+			tonemap.tint_factor = environment_get_adjustments_tint_factor(p_render_data->environment);
+			tonemap.use_tint = tonemap.use_bcs && tonemap.tint_factor > 0.0;
 		}
 
 		tonemap.luminance_multiplier = _render_buffers_get_luminance_multiplier();
@@ -759,6 +762,9 @@ void RendererSceneRenderRD::_post_process_subpass(RID p_source_texture, RID p_fr
 			tonemap.use_1d_color_correction = environment_get_use_1d_color_correction(p_render_data->environment);
 			tonemap.color_correction_texture = texture_storage->texture_get_rd_texture(environment_get_color_correction(p_render_data->environment));
 		}
+		tonemap.tint_color = environment_get_adjustments_tint_color(p_render_data->environment);
+		tonemap.tint_factor = environment_get_adjustments_tint_factor(p_render_data->environment);
+		tonemap.use_tint = tonemap.use_bcs && tonemap.tint_factor > 0.0;
 	}
 
 	tonemap.use_debanding = rb->get_use_debanding();

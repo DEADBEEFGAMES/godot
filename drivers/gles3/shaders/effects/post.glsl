@@ -126,5 +126,9 @@ void main() {
 	color.rgb = apply_color_correction(color.rgb);
 #endif
 
+#ifdef USE_BCS
+	color.rgb = mix(color.rgb, adjustment_tint.rgb, adjustment_tint.a);
+#endif
+
 	frag_color = color;
 }

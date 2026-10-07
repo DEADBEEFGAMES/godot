@@ -81,6 +81,20 @@ ToneMapper::~ToneMapper() {
 	tonemap.shader.version_free(tonemap.shader_version);
 }
 
+void ToneMapper::_set_tint(const TonemapSettings &p_settings) {
+	if (!p_settings.use_tint) {
+		return;
+	}
+
+	// The tint is applied to the final output, which is only in sRGB space when the tonemapper converts to it.
+	Color tint = p_settings.convert_to_srgb ? p_settings.tint_color : p_settings.tint_color.srgb_to_linear();
+	tonemap.push_constant.flags |= TONEMAP_FLAG_USE_TINT;
+	tonemap.push_constant.tint[0] = tint.r;
+	tonemap.push_constant.tint[1] = tint.g;
+	tonemap.push_constant.tint[2] = tint.b;
+	tonemap.push_constant.tint[3] = p_settings.tint_factor;
+}
+
 void ToneMapper::tonemapper(RID p_source_color, RID p_dst_framebuffer, const TonemapSettings &p_settings) {
 	UniformSetCacheRD *uniform_set_cache = UniformSetCacheRD::get_singleton();
 	ERR_FAIL_NULL(uniform_set_cache);
@@ -121,6 +135,8 @@ void ToneMapper::tonemapper(RID p_source_color, RID p_dst_framebuffer, const Ton
 	tonemap.push_constant.luminance_multiplier = p_settings.luminance_multiplier;
 
 	tonemap.push_constant.flags |= p_settings.use_color_correction ? TONEMAP_FLAG_USE_COLOR_CORRECTION : 0;
+
+	_set_tint(p_settings);
 
 	tonemap.push_constant.flags |= p_settings.use_fxaa ? TONEMAP_FLAG_USE_FXAA : 0;
 	tonemap.push_constant.flags |= p_settings.use_debanding ? TONEMAP_FLAG_USE_DEBANDING : 0;
@@ -207,6 +223,8 @@ void ToneMapper::tonemapper(RD::DrawListID p_subpass_draw_list, RID p_source_col
 	tonemap.push_constant.auto_exposure_scale = p_settings.auto_exposure_scale;
 
 	tonemap.push_constant.flags |= p_settings.use_color_correction ? TONEMAP_FLAG_USE_COLOR_CORRECTION : 0;
+
+	_set_tint(p_settings);
 
 	tonemap.push_constant.flags |= p_settings.use_debanding ? TONEMAP_FLAG_USE_DEBANDING : 0;
 	tonemap.push_constant.luminance_multiplier = p_settings.luminance_multiplier;

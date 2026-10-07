@@ -1087,6 +1087,28 @@ void Environment::_update_adjustment() {
 			color_correction);
 }
 
+void Environment::set_adjustment_tint_color(const Color &p_color) {
+	adjustment_tint_color = p_color;
+	_update_adjustment_tint();
+}
+
+Color Environment::get_adjustment_tint_color() const {
+	return adjustment_tint_color;
+}
+
+void Environment::set_adjustment_tint_factor(float p_factor) {
+	adjustment_tint_factor = p_factor;
+	_update_adjustment_tint();
+}
+
+float Environment::get_adjustment_tint_factor() const {
+	return adjustment_tint_factor;
+}
+
+void Environment::_update_adjustment_tint() {
+	RS::get_singleton()->environment_set_adjustment_tint(environment, adjustment_tint_color, adjustment_tint_factor);
+}
+
 // Private methods, constructor and destructor
 
 void Environment::_validate_property(PropertyInfo &p_property) const {
@@ -1550,6 +1572,10 @@ void Environment::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_adjustment_saturation"), &Environment::get_adjustment_saturation);
 	ClassDB::bind_method(D_METHOD("set_adjustment_color_correction", "color_correction"), &Environment::set_adjustment_color_correction);
 	ClassDB::bind_method(D_METHOD("get_adjustment_color_correction"), &Environment::get_adjustment_color_correction);
+	ClassDB::bind_method(D_METHOD("set_adjustment_tint_color", "color"), &Environment::set_adjustment_tint_color);
+	ClassDB::bind_method(D_METHOD("get_adjustment_tint_color"), &Environment::get_adjustment_tint_color);
+	ClassDB::bind_method(D_METHOD("set_adjustment_tint_factor", "factor"), &Environment::set_adjustment_tint_factor);
+	ClassDB::bind_method(D_METHOD("get_adjustment_tint_factor"), &Environment::get_adjustment_tint_factor);
 
 	ADD_GROUP("Adjustments", "adjustment_");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "adjustment_enabled"), "set_adjustment_enabled", "is_adjustment_enabled");
@@ -1557,6 +1583,8 @@ void Environment::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "adjustment_contrast", PROPERTY_HINT_RANGE, "0.01,8,0.01"), "set_adjustment_contrast", "get_adjustment_contrast");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "adjustment_saturation", PROPERTY_HINT_RANGE, "0.01,8,0.01"), "set_adjustment_saturation", "get_adjustment_saturation");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "adjustment_color_correction", PROPERTY_HINT_RESOURCE_TYPE, "Texture2D,Texture3D"), "set_adjustment_color_correction", "get_adjustment_color_correction");
+	ADD_PROPERTY(PropertyInfo(Variant::COLOR, "adjustment_tint_color", PROPERTY_HINT_COLOR_NO_ALPHA), "set_adjustment_tint_color", "get_adjustment_tint_color");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "adjustment_tint_factor", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_adjustment_tint_factor", "get_adjustment_tint_factor");
 
 	// Constants
 
@@ -1620,6 +1648,7 @@ Environment::Environment() {
 	_update_glow();
 	_update_fog();
 	_update_adjustment();
+	_update_adjustment_tint();
 	_update_volumetric_fog();
 	_update_bg_energy();
 	notify_property_list_changed();

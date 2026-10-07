@@ -49,6 +49,12 @@
 		<member name="adjustment_saturation" type="float" setter="set_adjustment_saturation" getter="get_adjustment_saturation" default="1.0">
 			The global color saturation value of the rendered scene (default value is 1). Effective only if [member adjustment_enabled] is [code]true[/code].
 		</member>
+		<member name="adjustment_tint_color" type="Color" setter="set_adjustment_tint_color" getter="get_adjustment_tint_color" default="Color(1, 1, 1, 1)">
+			The color that the rendered scene is blended towards by [member adjustment_tint_factor]. Effective only if [member adjustment_enabled] is [code]true[/code].
+		</member>
+		<member name="adjustment_tint_factor" type="float" setter="set_adjustment_tint_factor" getter="get_adjustment_tint_factor" default="0.0">
+			How strongly the rendered scene is blended towards [member adjustment_tint_color]. At [code]0.0[/code], the scene is unchanged; at [code]1.0[/code], every pixel is replaced by [member adjustment_tint_color]. This is applied after all other adjustments, including [member adjustment_color_correction]. Effective only if [member adjustment_enabled] is [code]true[/code].
+		</member>
 		<member name="ambient_light_color" type="Color" setter="set_ambient_light_color" getter="get_ambient_light_color" default="Color(0, 0, 0, 1)">
 			The ambient light's [Color]. Only effective if [member ambient_light_sky_contribution] is lower than [code]1.0[/code] (exclusive).
 		</member>

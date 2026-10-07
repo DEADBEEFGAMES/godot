@@ -722,3 +722,15 @@ bool RendererSceneRender::environment_get_use_1d_color_correction(RID p_env) con
 RID RendererSceneRender::environment_get_color_correction(RID p_env) const {
 	return environment_storage.environment_get_color_correction(p_env);
 }
+
+void RendererSceneRender::environment_set_adjustment_tint(RID p_env, const Color &p_color, float p_factor) {
+	environment_storage.environment_set_adjustment_tint(p_env, p_color, p_factor);
+}
+
+Color RendererSceneRender::environment_get_adjustments_tint_color(RID p_env) const {
+	return environment_storage.environment_get_adjustments_tint_color(p_env);
+}
+
+float RendererSceneRender::environment_get_adjustments_tint_factor(RID p_env) const {
+	return environment_storage.environment_get_adjustments_tint_factor(p_env);
+}

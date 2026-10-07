@@ -1398,6 +1398,10 @@ public:
 	PASS1RC(bool, environment_get_use_1d_color_correction, RID)
 	PASS1RC(RID, environment_get_color_correction, RID)
 
+	PASS3(environment_set_adjustment_tint, RID, const Color &, float)
+	PASS1RC(Color, environment_get_adjustments_tint_color, RID)
+	PASS1RC(float, environment_get_adjustments_tint_factor, RID)
+
 	PASS3R(Ref<Image>, environment_bake_panorama, RID, bool, const Size2i &)
 
 	PASS3(screen_space_roughness_limiter_set_active, bool, float, float)
