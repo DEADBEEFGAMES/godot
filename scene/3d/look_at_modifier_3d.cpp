@@ -65,6 +65,10 @@ void LookAtModifier3D::_validate_property(PropertyInfo &p_property) const {
 			(symmetry_limitation && (p_property.name.begins_with("primary_positive") || p_property.name.begins_with("primary_negative") || p_property.name.begins_with("secondary_positive") || (p_property.name.begins_with("secondary_negative"))))) {
 		p_property.usage = PROPERTY_USAGE_NONE;
 	}
+
+	if (!use_continuous_interpolation && p_property.name.begins_with("continuous_")) {
+		p_property.usage = PROPERTY_USAGE_NONE;
+	}
 }
 
 PackedStringArray LookAtModifier3D::get_configuration_warnings() const {
@@ -88,6 +92,9 @@ String LookAtModifier3D::get_bone_name() const {
 }
 
 void LookAtModifier3D::set_bone(int p_bone) {
+	if (bone != p_bone) {
+		reset_continuous_interpolation();
+	}
 	bone = p_bone;
 	Skeleton3D *sk = get_skeleton();
 	if (sk) {
@@ -238,6 +245,42 @@ Tween::EaseType LookAtModifier3D::get_ease_type() const {
 	return ease_type;
 }
 
+// For continuous interpolation.
+
+void LookAtModifier3D::set_use_continuous_interpolation(bool p_enabled) {
+	use_continuous_interpolation = p_enabled;
+	reset_continuous_interpolation();
+	notify_property_list_changed();
+}
+
+bool LookAtModifier3D::is_using_continuous_interpolation() const {
+	return use_continuous_interpolation;
+}
+
+void LookAtModifier3D::set_continuous_duration(float p_duration) {
+	continuous_duration = MAX(0, p_duration);
+}
+
+float LookAtModifier3D::get_continuous_duration() const {
+	return continuous_duration;
+}
+
+void LookAtModifier3D::set_continuous_transition_type(Tween::TransitionType p_transition_type) {
+	continuous_transition_type = p_transition_type;
+}
+
+Tween::TransitionType LookAtModifier3D::get_continuous_transition_type() const {
+	return continuous_transition_type;
+}
+
+void LookAtModifier3D::set_continuous_ease_type(Tween::EaseType p_ease_type) {
+	continuous_ease_type = p_ease_type;
+}
+
+Tween::EaseType LookAtModifier3D::get_continuous_ease_type() const {
+	return continuous_ease_type;
+}
+
 // For angle limitation.
 
 void LookAtModifier3D::set_use_angle_limitation(bool p_enabled) {
@@ -363,7 +406,7 @@ float LookAtModifier3D::get_interpolation_remaining() const {
 }
 
 bool LookAtModifier3D::is_interpolating() const {
-	return Math::is_zero_approx(remaining);
+	return !Math::is_zero_approx(remaining);
 }
 
 // General API.
@@ -403,6 +446,15 @@ void LookAtModifier3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_transition_type"), &LookAtModifier3D::get_transition_type);
 	ClassDB::bind_method(D_METHOD("set_ease_type", "ease_type"), &LookAtModifier3D::set_ease_type);
 	ClassDB::bind_method(D_METHOD("get_ease_type"), &LookAtModifier3D::get_ease_type);
+
+	ClassDB::bind_method(D_METHOD("set_use_continuous_interpolation", "enabled"), &LookAtModifier3D::set_use_continuous_interpolation);
+	ClassDB::bind_method(D_METHOD("is_using_continuous_interpolation"), &LookAtModifier3D::is_using_continuous_interpolation);
+	ClassDB::bind_method(D_METHOD("set_continuous_duration", "duration"), &LookAtModifier3D::set_continuous_duration);
+	ClassDB::bind_method(D_METHOD("get_continuous_duration"), &LookAtModifier3D::get_continuous_duration);
+	ClassDB::bind_method(D_METHOD("set_continuous_transition_type", "transition_type"), &LookAtModifier3D::set_continuous_transition_type);
+	ClassDB::bind_method(D_METHOD("get_continuous_transition_type"), &LookAtModifier3D::get_continuous_transition_type);
+	ClassDB::bind_method(D_METHOD("set_continuous_ease_type", "ease_type"), &LookAtModifier3D::set_continuous_ease_type);
+	ClassDB::bind_method(D_METHOD("get_continuous_ease_type"), &LookAtModifier3D::get_continuous_ease_type);
 
 	ClassDB::bind_method(D_METHOD("set_use_angle_limitation", "enabled"), &LookAtModifier3D::set_use_angle_limitation);
 	ClassDB::bind_method(D_METHOD("is_using_angle_limitation"), &LookAtModifier3D::is_using_angle_limitation);
@@ -461,6 +513,12 @@ void LookAtModifier3D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "duration", PROPERTY_HINT_RANGE, "0,10,0.001,or_greater,suffix:s"), "set_duration", "get_duration");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition_type", PROPERTY_HINT_ENUM, "Linear,Sine,Quint,Quart,Quad,Expo,Elastic,Cubic,Circ,Bounce,Back,Spring"), "set_transition_type", "get_transition_type");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "ease_type", PROPERTY_HINT_ENUM, "In,Out,InOut,OutIn"), "set_ease_type", "get_ease_type");
+
+	ADD_GROUP("Continuous Interpolation", "");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_continuous_interpolation"), "set_use_continuous_interpolation", "is_using_continuous_interpolation");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "continuous_duration", PROPERTY_HINT_RANGE, "0,10,0.001,or_greater,suffix:s"), "set_continuous_duration", "get_continuous_duration");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "continuous_transition_type", PROPERTY_HINT_ENUM, "Linear,Sine,Quint,Quart,Quad,Expo,Elastic,Cubic,Circ,Bounce,Back,Spring"), "set_continuous_transition_type", "get_continuous_transition_type");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "continuous_ease_type", PROPERTY_HINT_ENUM, "In,Out,InOut,OutIn"), "set_continuous_ease_type", "get_continuous_ease_type");
 
 	ADD_GROUP("Angle Limitation", "");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_angle_limitation"), "set_use_angle_limitation", "is_using_angle_limitation");
@@ -568,14 +626,15 @@ void LookAtModifier3D::_process_modification() {
 		}
 	}
 
+	double delta = 0.0;
+	if (skeleton->get_modifier_callback_mode_process() == Skeleton3D::MODIFIER_CALLBACK_MODE_PROCESS_IDLE) {
+		delta = get_process_delta_time();
+	} else {
+		delta = get_physics_process_delta_time();
+	}
+
 	// Do time-based interpolation.
 	if (remaining > 0) {
-		double delta = 0.0;
-		if (skeleton->get_modifier_callback_mode_process() == Skeleton3D::MODIFIER_CALLBACK_MODE_PROCESS_IDLE) {
-			delta = get_process_delta_time();
-		} else {
-			delta = get_physics_process_delta_time();
-		}
 		remaining = MAX(0, remaining - time_step * delta);
 		if (is_flippable) {
 			// Interpolate through the rest same as AnimationTree blending for preventing to penetrate the bone into the body.
@@ -587,8 +646,75 @@ void LookAtModifier3D::_process_modification() {
 		}
 	}
 
-	skeleton->set_bone_pose_rotation(bone, destination);
+	// Keep prev_q as the result before continuous interpolation, so that the time-based interpolation and the continuous interpolation are stacked as independent stages.
 	prev_q = destination;
+
+	if (use_continuous_interpolation) {
+		destination = process_continuous_interpolation(destination, delta);
+	}
+
+	skeleton->set_bone_pose_rotation(bone, destination);
+}
+
+void LookAtModifier3D::reset_continuous_interpolation() {
+	continuous_initialized = false;
+	continuous_time = 0.0;
+	continuous_samples.clear();
+}
+
+Quaternion LookAtModifier3D::process_continuous_interpolation(const Quaternion &p_destination, double p_delta) {
+	if (!continuous_initialized || Math::is_zero_approx(continuous_duration)) {
+		reset_continuous_interpolation();
+		continuous_base = p_destination;
+		continuous_initialized = true;
+		return p_destination;
+	}
+
+	// The sample is stamped at the start of the frame, so the newest motion already advances by p_delta in this frame same as the time-based interpolation.
+	double sample_time = continuous_time;
+	continuous_time += p_delta;
+
+	const Quaternion &latest = continuous_samples.is_empty() ? continuous_base : continuous_samples[continuous_samples.size() - 1].rotation;
+	if (!latest.is_equal_approx(p_destination)) {
+		// Merge motions that are closer in time than the resolution to bound the cost when the target moves every frame.
+		double resolution = continuous_duration / CONTINUOUS_MAX_SAMPLES;
+		if (!continuous_samples.is_empty() && sample_time - continuous_samples[continuous_samples.size() - 1].time < resolution) {
+			continuous_samples[continuous_samples.size() - 1].rotation = p_destination;
+		} else {
+			ContinuousSample sample;
+			sample.time = sample_time;
+			sample.rotation = p_destination;
+			continuous_samples.push_back(sample);
+		}
+	}
+
+	// Motions older than the duration are fully applied, so fold them into the base.
+	uint32_t expired = 0;
+	while (expired < continuous_samples.size() && continuous_time - continuous_samples[expired].time >= continuous_duration) {
+		continuous_base = continuous_samples[expired].rotation;
+		expired++;
+	}
+	if (expired > 0) {
+		for (uint32_t i = expired; i < continuous_samples.size(); i++) {
+			continuous_samples[i - expired] = continuous_samples[i];
+		}
+		continuous_samples.resize(continuous_samples.size() - expired);
+	}
+
+	if (continuous_samples.is_empty()) {
+		continuous_time = 0.0; // Rebase the clock while idle to keep precision.
+		return continuous_base;
+	}
+
+	double inv_duration = 1.0 / continuous_duration;
+	Quaternion result = continuous_base;
+	Quaternion from = continuous_base;
+	for (const ContinuousSample &sample : continuous_samples) {
+		float weight = Tween::run_equation(continuous_transition_type, continuous_ease_type, (continuous_time - sample.time) * inv_duration, 0.0, 1.0, 1.0);
+		result = result * Quaternion().slerp(from.inverse() * sample.rotation, weight);
+		from = sample.rotation;
+	}
+	return result.normalized();
 }
 
 bool LookAtModifier3D::is_intersecting_axis(const Vector3 &p_prev, const Vector3 &p_current, Vector3::Axis p_flipping_axis, Vector3::Axis p_check_axis, bool p_check_plane) const {

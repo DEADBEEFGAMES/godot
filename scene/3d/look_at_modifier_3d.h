@@ -31,6 +31,7 @@
 #ifndef LOOK_AT_MODIFIER_3D_H
 #define LOOK_AT_MODIFIER_3D_H
 
+#include "core/templates/local_vector.h"
 #include "scene/3d/skeleton_modifier_3d.h"
 #include "scene/animation/tween.h"
 
@@ -95,12 +96,31 @@ private:
 	float remaining = 0;
 	float time_step = 1.0;
 
+	bool use_continuous_interpolation = false;
+	float continuous_duration = 0.25;
+	Tween::TransitionType continuous_transition_type = Tween::TRANS_SINE;
+	Tween::EaseType continuous_ease_type = Tween::EASE_IN_OUT;
+
+	// For continuous interpolation. Each sample is a step of the target rotation which is eased in over continuous_duration independently,
+	// so the result is the sum of the transition curve applied to every motion of the target within the window.
+	struct ContinuousSample {
+		double time = 0.0;
+		Quaternion rotation;
+	};
+	static constexpr int CONTINUOUS_MAX_SAMPLES = 64;
+	bool continuous_initialized = false;
+	double continuous_time = 0.0;
+	Quaternion continuous_base;
+	LocalVector<ContinuousSample> continuous_samples;
+
 	float remap_damped(float p_from, float p_to, float p_damp_threshold, float p_value) const;
 	double get_bspline_y(const Vector2 &p_from, const Vector2 &p_control, const Vector2 &p_to, double p_x) const;
 	bool is_intersecting_axis(const Vector3 &p_prev, const Vector3 &p_current, Vector3::Axis p_flipping_axis, Vector3::Axis p_check_axis, bool p_check_plane = false) const;
 
 	Transform3D look_at_with_axes(const Transform3D &p_rest);
 	void init_transition();
+	void reset_continuous_interpolation();
+	Quaternion process_continuous_interpolation(const Quaternion &p_destination, double p_delta);
 
 protected:
 	virtual PackedStringArray get_configuration_warnings() const override;
@@ -146,6 +166,15 @@ public:
 	Tween::TransitionType get_transition_type() const;
 	void set_ease_type(Tween::EaseType p_ease_type);
 	Tween::EaseType get_ease_type() const;
+
+	void set_use_continuous_interpolation(bool p_enabled);
+	bool is_using_continuous_interpolation() const;
+	void set_continuous_duration(float p_duration);
+	float get_continuous_duration() const;
+	void set_continuous_transition_type(Tween::TransitionType p_transition_type);
+	Tween::TransitionType get_continuous_transition_type() const;
+	void set_continuous_ease_type(Tween::EaseType p_ease_type);
+	Tween::EaseType get_continuous_ease_type() const;
 
 	void set_use_angle_limitation(bool p_enabled);
 	bool is_using_angle_limitation() const;

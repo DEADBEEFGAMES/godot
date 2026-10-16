@@ -19,7 +19,7 @@
 		<method name="is_interpolating" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Returns whether the time-based interpolation is running or not. If [code]true[/code], it is equivalent to [method get_interpolation_remaining] being [code]0[/code].
+				Returns whether the time-based interpolation is running or not. If [code]false[/code], it is equivalent to [method get_interpolation_remaining] being [code]0[/code].
 				This is useful to determine whether a [LookAtModifier3D] can be removed safely.
 			</description>
 		</method>
@@ -37,6 +37,15 @@
 		</member>
 		<member name="bone_name" type="String" setter="set_bone_name" getter="get_bone_name" default="&quot;&quot;">
 			The bone name of the [Skeleton3D] that the modification will operate on.
+		</member>
+		<member name="continuous_duration" type="float" setter="set_continuous_duration" getter="get_continuous_duration" default="0.25">
+			The duration of the continuous interpolation. Every motion of the result is eased in over this duration, so the bone settles on the target exactly this many seconds after the target stops moving.
+		</member>
+		<member name="continuous_ease_type" type="int" setter="set_continuous_ease_type" getter="get_continuous_ease_type" enum="Tween.EaseType" default="2">
+			The ease type of the continuous interpolation. See also [enum Tween.EaseType].
+		</member>
+		<member name="continuous_transition_type" type="int" setter="set_continuous_transition_type" getter="get_continuous_transition_type" enum="Tween.TransitionType" default="1">
+			The transition type of the continuous interpolation. See also [enum Tween.TransitionType].
 		</member>
 		<member name="duration" type="float" setter="set_duration" getter="get_duration" default="0.0">
 			The duration of the time-based interpolation. Interpolation is triggered at the following cases:
@@ -123,6 +132,11 @@
 			If [code]true[/code], limits the degree of rotation. This helps prevent the character's neck from rotating 360 degrees.
 			[b]Note:[/b] As with [AnimationTree] blending, interpolation is provided that favors [method Skeleton3D.get_bone_rest]. This means that interpolation does not select the shortest path in some cases.
 			[b]Note:[/b] Some [member transition_type] may exceed the limitations (e.g. `Back`, `Elastic`, and `Spring`). If interpolation occurs while overshooting the limitations, the result might possibly not respect the bone rest.
+		</member>
+		<member name="use_continuous_interpolation" type="bool" setter="set_use_continuous_interpolation" getter="is_using_continuous_interpolation" default="false">
+			If [code]true[/code], the continuous interpolation is always applied to the result, unlike the time-based interpolation by [member duration] which is only triggered by specific events.
+			Each motion of the target is treated as a separate step which follows the transition curve over [member continuous_duration], and the steps are accumulated. A single jump of the target is interpolated exactly like a tween, while a moving target is followed smoothly with a lag depending on its speed.
+			[b]Note:[/b] The continuous interpolation is applied after the time-based interpolation, so both are stacked when they are used together.
 		</member>
 		<member name="use_secondary_rotation" type="bool" setter="set_use_secondary_rotation" getter="is_using_secondary_rotation" default="true">
 			If [code]true[/code], provides rotation by two axes.
