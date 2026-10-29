@@ -396,6 +396,23 @@ struct ObjectGDExtension {
  * much alone defines the object model.
  */
 
+// This is a barebones version of GDCLASS,
+// only intended for simple classes deriving from Object
+// so that they can support the `Object::cast_to()` method.
+// (Backported from upstream fa0a3c9c6e for the Wayland sub-windows backport.)
+#define GDSOFTCLASS(m_class, m_inherits)                                             \
+public:                                                                              \
+	typedef m_class self_type;                                                       \
+	static _FORCE_INLINE_ void *get_class_ptr_static() {                             \
+		static int ptr;                                                              \
+		return &ptr;                                                                 \
+	}                                                                                \
+	virtual bool is_class_ptr(void *p_ptr) const override {                          \
+		return (p_ptr == get_class_ptr_static()) || m_inherits::is_class_ptr(p_ptr); \
+	}                                                                                \
+                                                                                     \
+private:
+
 #define GDCLASS(m_class, m_inherits)                                                                                                        \
 private:                                                                                                                                    \
 	void operator=(const m_class &p_rval) {}                                                                                                \
